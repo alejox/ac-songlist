@@ -1,0 +1,8 @@
+build/
+build-*/
+sdk/
+obs-src/
+obs-bin/
+obs-dl/
+pkg/
+.DS_Store
