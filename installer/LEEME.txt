@@ -76,6 +76,10 @@ Para que responda ("entro a la cola en el puesto 3"), en Ajustes pon una cuenta
 de Twitch (la tuya o la de un bot) y su token OAuth con permisos chat:read y
 chat:edit. El token se guarda solo en tu equipo.
 
+AVISO: por ahora las respuestas solo funcionan en Linux. El OBS de Windows y
+de macOS no incluye la conexion segura que hace falta: ahi el plugin lee los
+pedidos con normalidad, pero no escribe en el chat.
+
 
 ATAJOS DE TECLADO
 -----------------

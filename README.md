@@ -22,7 +22,7 @@ Plugin nativo de OBS (C++/Qt) para streamers que tocan en directo. Sin servicios
   - *Cola de pedidos*: los siguientes pedidos y quién los pidió.
   - *Lista de canciones*: la biblioteca numerada, por páginas. Puede estar siempre visible o aparecer solo cuando alguien escribe `!lista`.
 - **Estilo neutro y configurable** desde las propiedades de la fuente: tipografía, tamaño, colores de texto, acento y fondo, opacidad (0 = sin fondo), esquinas, márgenes, alineación, encabezado, filas y columnas.
-- **Chat de Twitch** sin iniciar sesión para leer pedidos; opcionalmente una cuenta de bot para que conteste.
+- **Chat de Twitch** sin iniciar sesión para leer pedidos; opcionalmente una cuenta de bot para que conteste (de momento solo en Linux, ver más abajo).
 - **Atajos de teclado** en *Ajustes → Atajos*: siguiente canción, terminar la actual, abrir/cerrar pedidos, mostrar la lista.
 
 ![Cola y lista](docs/cola-y-lista.png)
@@ -65,7 +65,10 @@ La búsqueda por nombre tolera acentos, mayúsculas, palabras sueltas y erratas 
 
 ### Responder en el chat (opcional)
 
-Para leer pedidos no hace falta nada más. Para que el plugin conteste («entró a la cola en el puesto 3»), pon en *Ajustes* una cuenta de Twitch y su token OAuth con permisos `chat:read` y `chat:edit`. El token se guarda en tu equipo, en el archivo de datos del plugin, sin cifrar (igual que OBS guarda tu clave de retransmisión): no compartas ese archivo.
+Para leer pedidos no hace falta nada más. Para que el plugin conteste («entró a la cola en el puesto 3»), pon en *Ajustes* una cuenta de Twitch y su token OAuth con permisos `chat:read` y `chat:edit`.
+
+> **Por ahora las respuestas solo funcionan en Linux.** El OBS oficial de Windows y de macOS no incluye el componente de conexión segura de Qt, y el plugin nunca envía el token sin cifrar. En esos sistemas lee los pedidos con normalidad, pero no escribe en el chat; el panel lo indica como «solo lectura».
+ El token se guarda en tu equipo, en el archivo de datos del plugin, sin cifrar (igual que OBS guarda tu clave de retransmisión): no compartas ese archivo.
 
 ### Importar canciones (CSV)
 
@@ -118,5 +121,6 @@ En Windows y macOS lo compila [el flujo de GitHub Actions](.github/workflows/bui
 ## Límites conocidos
 
 - Solo lee el chat de **Twitch** (no Kick ni YouTube).
+- En **Windows y macOS no contesta en el chat** (falta la conexión segura de Qt dentro de OBS); leer pedidos sí funciona.
 - No tiene página web pública de la lista: el público la ve en el stream con `!lista`.
 - Probado dentro de OBS 30 en Linux. Las versiones de Windows y macOS se compilan y pasan las pruebas del núcleo en GitHub Actions, pero no se han ejecutado dentro de OBS en esos sistemas antes de publicarlas aquí: si algo falla al cargarlo, el registro de OBS (*Ayuda → Archivos de registro*) lo dirá en las líneas `[ac-songlist]`.
