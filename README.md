@@ -41,6 +41,8 @@ Después abre OBS y activa el panel en *Paneles → AC Songlist*.
 
 ## Uso
 
+**Guía completa paso a paso: [INSTRUCTIVO.md](INSTRUCTIVO.md).** Lo esencial:
+
 1. **Biblioteca.** Pestaña *Canciones*: escribe título y artista y pulsa Enter. Cada canción recibe un número fijo, que es el que usa el público para pedirla.
 2. **Chat.** Pestaña *Ajustes*: escribe tu canal de Twitch y pulsa *Guardar y conectar*.
 3. **Overlay.** En tu escena, *Fuentes → + → AC Songlist*, y elige qué mostrar. Agrega la fuente tantas veces como quieras (por ejemplo, una para *Sonando ahora* y otra para la *Lista*).
