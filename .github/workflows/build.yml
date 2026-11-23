@@ -167,9 +167,11 @@ jobs:
           Get-ChildItem pkg -Recurse -File | ForEach-Object { '{0,10}  {1}' -f $_.Length, $_.FullName.Substring((Resolve-Path pkg).Path.Length + 1) }
           Write-Host '--- de que depende el .dll'
           $deps = dumpbin /nologo /dependents $dll | ForEach-Object { if ($_ -match '^\s+(\S+\.dll)\s*$') { $Matches[1] } }
-          $system = '^(KERNEL32|USER32|MSVCP140|VCRUNTIME140(_1)?|api-ms-win-.*)\.dll$'
+          $runtime = '^(MSVCP140|VCRUNTIME140(_1)?|api-ms-win-.*)\.dll$'
           foreach ($dep in $deps) {
-            if ($dep -match $system) { Write-Host "  $dep (Windows / Visual C++)"; continue }
+            if ($dep -match $runtime) { Write-Host "  $dep (Visual C++, lo instala OBS)"; continue }
+            # KERNEL32, WINHTTP...: forman parte de Windows
+            if (Test-Path (Join-Path $env:SystemRoot "System32\$dep")) { Write-Host "  $dep (Windows)"; continue }
             $found = Get-ChildItem obs-bin -Recurse -Filter $dep | Select-Object -First 1
             if (-not $found) { throw "$dep no viene con OBS: el plugin no cargaria" }
             Write-Host "  $dep (incluido en OBS)"
