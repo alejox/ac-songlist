@@ -71,8 +71,8 @@ private:
 
 	QTableWidget *m_history;
 
-	QLineEdit *m_channel, *m_botUser, *m_botToken;
-	QCheckBox *m_replies, *m_offList;
+	QLineEdit *m_channel;
+	QCheckBox *m_offList;
 	QSpinBox *m_perUser, *m_maxQueue, *m_listSeconds;
 	QLabel *m_settingsSaved;
 };

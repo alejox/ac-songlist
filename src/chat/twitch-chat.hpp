@@ -1,5 +1,6 @@
 // Cliente minimo del chat de Twitch (IRC). Lee de forma anonima; si se configura
-// una cuenta de bot con token, ademas puede responder.
+// una cuenta de bot con token, ademas puede responder. La conexion va siempre cifrada:
+// con el TLS de Qt donde existe, o con la red segura del sistema (Windows y macOS).
 #pragma once
 
 #include "../core/bot.hpp"
@@ -8,9 +9,9 @@
 #include <QStringList>
 #include <QTimer>
 
-class QTcpSocket;
-
 namespace acsl {
+
+class ChatLink;
 
 class TwitchChat : public QObject {
 	Q_OBJECT
@@ -34,6 +35,8 @@ public:
 	bool canSend() const { return m_state == State::Connected && m_authenticated; }
 	bool authFailed() const { return m_authFailed; }
 	bool secure() const { return m_secure; }
+	// "qt-tls", "sistema" (red segura del sistema operativo), "sin-cifrar" o "prueba"
+	QString transport() const { return m_transport; }
 	void send(const QString &text);
 
 signals:
@@ -46,15 +49,14 @@ private:
 	void scheduleRetry();
 	void setState(State s);
 	void onConnected();
-	void onReadyRead();
 	void onClosed();
 	void handleLine(const QString &line);
 	void write(const QString &line);
 	void flushOutbox();
 
-	QTcpSocket *m_socket = nullptr;
-	QTimer m_retryTimer, m_pingTimer, m_sendTimer;
-	QByteArray m_buffer;
+	ChatLink *m_link = nullptr;
+	QTimer m_retryTimer, m_pingTimer, m_sendTimer, m_connectTimer;
+	QString m_transport;
 	QStringList m_outbox;
 	QString m_channel, m_botUser, m_botToken;
 	State m_state = State::Off;

@@ -44,6 +44,11 @@ jobs:
       - name: Pruebas
         run: QT_QPA_PLATFORM=offscreen ./build/acsl-tests
 
+      - name: Conexion real con Twitch
+        timeout-minutes: 4
+        continue-on-error: true
+        run: QT_QPA_PLATFORM=offscreen ./build/acsl-nettest
+
       - name: Empaquetar
         run: |
           mkdir -p pkg/ac-songlist/bin/64bit pkg/ac-songlist/data
@@ -142,6 +147,13 @@ jobs:
         run: |
           ./build/RelWithDebInfo/acsl-tests.exe
           if ($LASTEXITCODE -ne 0) { throw 'Fallaron las pruebas' }
+
+      - name: Conexion real con Twitch
+        timeout-minutes: 4
+        continue-on-error: true
+        run: |
+          ./build/RelWithDebInfo/acsl-nettest.exe
+          if ($LASTEXITCODE -ne 0) { throw 'Fallo la conexion real con Twitch' }
 
       - name: Empaquetar
         run: |
@@ -248,6 +260,11 @@ jobs:
       - name: Pruebas
         run: ./build/acsl-tests
 
+      - name: Conexion real con Twitch
+        timeout-minutes: 4
+        continue-on-error: true
+        run: ./build/acsl-nettest
+
       - name: Empaquetar
         run: |
           set -euo pipefail
@@ -315,7 +332,7 @@ jobs:
 
           Despues, en OBS: menu **Paneles > AC Songlist**.
 
-          Limite conocido: en Windows y macOS el plugin lee los pedidos del chat pero todavia no contesta en el chat.
+          El plugin lee los pedidos del chat de Twitch por conexion cifrada y sin iniciar sesion; no escribe en el chat.
           NOTAS
           gh release create "$tag" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
             --title "AC Songlist ${tag#v}" --notes-file notas.md \

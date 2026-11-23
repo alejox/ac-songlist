@@ -137,15 +137,13 @@ void Plugin::saveNow()
 
 void Plugin::applyChatSettings()
 {
-	const Settings &c = m_store.settings();
-	m_chat.configure(c.channel, c.botUser, c.botToken);
+	// Solo lectura: el plugin se conecta de forma anonima y nunca escribe en el chat.
+	m_chat.configure(m_store.settings().channel, QString(), QString());
 }
 
 void Plugin::onChatMessage(const ChatUser &user, const QString &text)
 {
-	const QString reply = m_bot->handle(user, text);
-	if (!reply.isEmpty() && m_store.settings().replies)
-		m_chat.send(reply);
+	m_bot->handle(user, text); // aplica el comando; la respuesta de texto no se envia
 }
 
 void Plugin::syncSources()

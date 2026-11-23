@@ -1,4 +1,5 @@
 // Pruebas del nucleo: busqueda, pedidos, cola, comandos de chat, CSV y chat IRC.
+#include "chat/chat-link.hpp"
 #include "chat/twitch-chat.hpp"
 #include "core/bot.hpp"
 #include "core/csv.hpp"
@@ -6,9 +7,23 @@
 #include "core/store.hpp"
 
 #include <QCoreApplication>
+#include <QElapsedTimer>
 #include <QFile>
 #include <QTemporaryDir>
+#include <QThread>
 #include <cstdio>
+#include <functional>
+
+#ifndef _WIN32
+#include <arpa/inet.h>
+#include <netinet/in.h>
+#include <poll.h>
+#include <sys/socket.h>
+#include <unistd.h>
+#include <atomic>
+#include <mutex>
+#include <thread>
+#endif
 
 using namespace acsl;
 
@@ -378,6 +393,249 @@ static void testIrc()
 	CHECK_EQ(TwitchChat::cleanToken("abc\r\nPRIVMSG"), QString());
 }
 
+#ifndef _WIN32
+// ---------------------------------------------------------------------------
+// Servidor de chat simulado (se comporta como Twitch lo justo) para probar la
+// conexion por hilos que usan Windows y macOS, sin salir de este equipo.
+class FakeTwitch {
+public:
+	FakeTwitch()
+	{
+		m_listen = ::socket(AF_INET, SOCK_STREAM, 0);
+		int yes = 1;
+		::setsockopt(m_listen, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes));
+		sockaddr_in addr{};
+		addr.sin_family = AF_INET;
+		addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+		addr.sin_port = 0;
+		::bind(m_listen, reinterpret_cast<sockaddr *>(&addr), sizeof(addr));
+		::listen(m_listen, 4);
+		socklen_t len = sizeof(addr);
+		::getsockname(m_listen, reinterpret_cast<sockaddr *>(&addr), &len);
+		m_port = ntohs(addr.sin_port);
+		m_thread = std::thread([this]() { run(); });
+	}
+	~FakeTwitch()
+	{
+		m_stop = true;
+		m_thread.join();
+		::close(m_listen);
+	}
+	int port() const { return m_port; }
+	void inject(const std::string &line)
+	{
+		std::lock_guard<std::mutex> lock(m_mutex);
+		m_outgoing.push_back(line + "\r\n");
+	}
+	void kick() { m_kick = true; }
+	int connections() const { return m_connections; }
+	QStringList received()
+	{
+		std::lock_guard<std::mutex> lock(m_mutex);
+		return m_received;
+	}
+	bool got(const QString &line) { return received().contains(line); }
+	bool gotPrefix(const QString &prefix)
+	{
+		for (const QString &l : received())
+			if (l.startsWith(prefix))
+				return true;
+		return false;
+	}
+
+private:
+	void run()
+	{
+		while (!m_stop) {
+			pollfd p{m_listen, POLLIN, 0};
+			if (::poll(&p, 1, 20) <= 0)
+				continue;
+			const int fd = ::accept(m_listen, nullptr, nullptr);
+			if (fd < 0)
+				continue;
+			m_connections++;
+			m_kick = false;
+			serve(fd);
+			::close(fd);
+		}
+	}
+	void serve(int fd)
+	{
+		std::string in, pass;
+		while (!m_stop && !m_kick) {
+			{
+				std::lock_guard<std::mutex> lock(m_mutex);
+				for (const std::string &out : m_outgoing)
+					(void)!::send(fd, out.data(), out.size(), MSG_NOSIGNAL);
+				m_outgoing.clear();
+			}
+			pollfd p{fd, POLLIN, 0};
+			if (::poll(&p, 1, 10) <= 0)
+				continue;
+			char buffer[2048];
+			const ssize_t n = ::recv(fd, buffer, sizeof(buffer), 0);
+			if (n <= 0)
+				return;
+			in.append(buffer, size_t(n));
+			size_t nl;
+			while ((nl = in.find('\n')) != std::string::npos) {
+				std::string line = in.substr(0, nl);
+				in.erase(0, nl + 1);
+				if (!line.empty() && line.back() == '\r')
+					line.pop_back();
+				{
+					std::lock_guard<std::mutex> lock(m_mutex);
+					m_received << QString::fromStdString(line);
+				}
+				if (line.rfind("PASS ", 0) == 0)
+					pass = line;
+				if (line.rfind("NICK ", 0) == 0) {
+					const bool ok = pass.empty() || pass == "PASS oauth:tokenbueno1234567890";
+					const std::string reply = ok ? ":tmi.twitch.tv 001 " + line.substr(5) + " :Welcome, GLHF!\r\n"
+								     : ":tmi.twitch.tv NOTICE * :Login authentication failed\r\n";
+					(void)!::send(fd, reply.data(), reply.size(), MSG_NOSIGNAL);
+				}
+			}
+		}
+	}
+
+	int m_listen = -1, m_port = 0;
+	std::atomic<bool> m_stop{false}, m_kick{false};
+	std::atomic<int> m_connections{0};
+	std::mutex m_mutex;
+	std::vector<std::string> m_outgoing;
+	QStringList m_received;
+	std::thread m_thread;
+};
+
+// Espera (procesando eventos de Qt) a que se cumpla la condicion.
+static bool waitFor(const std::function<bool()> &condition, int ms = 4000)
+{
+	QElapsedTimer timer;
+	timer.start();
+	while (timer.elapsed() < ms) {
+		QCoreApplication::processEvents();
+		if (condition())
+			return true;
+		QThread::msleep(2);
+	}
+	QCoreApplication::processEvents();
+	return condition();
+}
+
+static void testNativeLink()
+{
+	FakeTwitch server;
+	const int port = server.port();
+	int opened = 0, closed = 0;
+	QStringList lines;
+	{
+		NativeLink link([port]() { return NativeConn::createLocalTest(port); });
+		QObject::connect(&link, &ChatLink::opened, [&]() { opened++; });
+		QObject::connect(&link, &ChatLink::closed, [&]() { closed++; });
+		QObject::connect(&link, &ChatLink::lineReceived, [&](const QString &l) { lines << l; });
+		CHECK(link.secure());
+		link.start();
+		link.sendLine("NICK antes_de_abrir"); // aun no ha conectado: se encola y sale al conectar
+		CHECK(waitFor([&]() { return opened == 1; }));
+		CHECK(waitFor([&]() { return server.got("NICK antes_de_abrir"); }));
+		CHECK(waitFor([&]() { return lines.size() == 1; }));
+		CHECK(lines.value(0).contains(" 001 "));
+
+		// escribir mientras el otro hilo esta bloqueado leyendo
+		for (int i = 0; i < 50; i++)
+			link.sendLine(QStringLiteral("PRIVMSG #c :mensaje %1").arg(i));
+		server.inject("PING :tmi.twitch.tv");
+		server.inject(":a!a@a PRIVMSG #c :hola \xc3\xb1" "and\xc3\xba"); // UTF-8 partido para no confundir al compilador
+		CHECK(waitFor([&]() { return server.got("PRIVMSG #c :mensaje 49"); }));
+		CHECK(waitFor([&]() { return lines.size() == 3; }));
+		CHECK_EQ(lines.value(1), QString("PING :tmi.twitch.tv"));
+		CHECK_EQ(lines.value(2), QStringLiteral(":a!a@a PRIVMSG #c :hola \u00f1and\u00fa"));
+		const QStringList got = server.received();
+		CHECK_EQ(got.indexOf("PRIVMSG #c :mensaje 1") - got.indexOf("PRIVMSG #c :mensaje 0"), 1); // en orden
+
+		// parar con el lector bloqueado: inmediato y sin senal de cierre
+		QElapsedTimer t;
+		t.start();
+		link.stop();
+		CHECK(t.elapsed() < 1000);
+		waitFor([]() { return false; }, 100);
+		CHECK_EQ(closed, 0);
+
+		// el mismo objeto se puede volver a arrancar; si el servidor corta, avisa
+		link.start();
+		CHECK(waitFor([&]() { return opened == 2; }));
+		server.kick();
+		CHECK(waitFor([&]() { return closed == 1; }));
+	}
+	// destruir un enlace que nunca conecto (puerto sin servidor) no cuelga ni revienta
+	{
+		int failed = 0;
+		NativeLink dead([]() { return NativeConn::createLocalTest(1); });
+		QObject::connect(&dead, &ChatLink::closed, [&]() { failed++; });
+		dead.start();
+		CHECK(waitFor([&]() { return failed == 1; }));
+	}
+	{
+		NativeLink none([]() { return std::unique_ptr<NativeConn>(); });
+		int failed = 0;
+		QObject::connect(&none, &ChatLink::closed, [&]() { failed++; });
+		none.start();
+		CHECK(waitFor([&]() { return failed == 1; }));
+	}
+}
+
+static void testChatOverNativeLink()
+{
+	FakeTwitch server;
+	qputenv("ACSL_NATIVE_TEST_PORT", QByteArray::number(server.port()));
+
+	TwitchChat chat;
+	QList<QPair<ChatUser, QString>> messages;
+	QObject::connect(&chat, &TwitchChat::message,
+			 [&](const ChatUser &u, const QString &text) { messages.append({u, text}); });
+
+	// lectura anonima, que es como lo usa el plugin
+	chat.configure("https://twitch.tv/MiCanal", "", "");
+	CHECK(waitFor([&]() { return chat.state() == TwitchChat::State::Connected; }));
+	CHECK(waitFor([&]() { return server.got("JOIN #micanal"); }));
+	CHECK(server.gotPrefix("NICK justinfan"));
+	CHECK(!server.gotPrefix("PASS "));
+	CHECK(!chat.canSend());
+	CHECK_EQ(chat.transport(), QString("prueba"));
+	server.inject("@badges=moderator/1;display-name=Moder;mod=1 :moder!m@m.tmi.twitch.tv PRIVMSG #micanal :!sr 12");
+	CHECK(waitFor([&]() { return messages.size() == 1; }));
+	CHECK_EQ(messages.value(0).second, QString("!sr 12"));
+	CHECK(messages.value(0).first.moderator);
+	server.inject("PING :tmi.twitch.tv");
+	CHECK(waitFor([&]() { return server.got("PONG :tmi.twitch.tv"); }));
+
+	// si el servidor corta, reconecta solo
+	const int before = server.connections();
+	server.kick();
+	CHECK(waitFor([&]() { return chat.state() == TwitchChat::State::Retrying; }));
+	CHECK(waitFor([&]() { return server.connections() > before && chat.state() == TwitchChat::State::Connected; }, 6000));
+
+	// con cuenta: se identifica y puede escribir
+	chat.configure("micanal", "mibot", "oauth:tokenbueno1234567890");
+	CHECK(waitFor([&]() { return chat.canSend(); }));
+	CHECK(server.got("PASS oauth:tokenbueno1234567890"));
+	CHECK(server.got("NICK mibot"));
+	chat.send("hola\r\nJOIN #otro");
+	CHECK(waitFor([&]() { return server.got("PRIVMSG #micanal :hola JOIN #otro"); }, 4000));
+	CHECK(!server.got("JOIN #otro")); // sin inyeccion de comandos
+
+	// token malo: sigue leyendo de forma anonima
+	chat.configure("micanal", "mibot", "tokenmalo9876543210");
+	CHECK(waitFor([&]() { return chat.authFailed() && chat.state() == TwitchChat::State::Connected; }, 6000));
+	CHECK(!chat.canSend());
+
+	chat.stop();
+	CHECK(chat.state() == TwitchChat::State::Off);
+	qunsetenv("ACSL_NATIVE_TEST_PORT");
+}
+#endif // !_WIN32
+
 int main(int argc, char **argv)
 {
 	QCoreApplication app(argc, argv);
@@ -398,6 +656,10 @@ int main(int argc, char **argv)
 	testCsv();
 	testBot();
 	testIrc();
+#ifndef _WIN32
+	testNativeLink();
+	testChatOverNativeLink();
+#endif
 	std::printf("%d comprobaciones, %d fallos\n", g_run, g_failed);
 	return g_failed ? 1 : 0;
 }

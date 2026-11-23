@@ -533,22 +533,6 @@ QWidget *Dock::buildSettingsTab()
 	rulesForm->addRow(T("Settings.ListSeconds"), m_listSeconds);
 	rulesForm->addRow(m_offList);
 
-	auto *bot = new QGroupBox(T("Settings.Bot"), inner);
-	m_replies = new QCheckBox(T("Settings.Replies"), bot);
-	m_botUser = new QLineEdit(bot);
-	m_botUser->setPlaceholderText(T("Settings.BotUser.Hint"));
-	m_botToken = new QLineEdit(bot);
-	m_botToken->setEchoMode(QLineEdit::Password);
-	m_botToken->setPlaceholderText(QStringLiteral("oauth:..."));
-	auto *botHelp = new QLabel(T("Settings.Bot.Help"), bot);
-	botHelp->setWordWrap(true);
-	botHelp->setEnabled(false);
-	auto *botForm = new QFormLayout(bot);
-	botForm->addRow(botHelp);
-	botForm->addRow(m_replies);
-	botForm->addRow(T("Settings.BotUser"), m_botUser);
-	botForm->addRow(T("Settings.BotToken"), m_botToken);
-
 	auto *save = button(T("Settings.Save"), T("Settings.Save.Tip"), inner);
 	m_settingsSaved = new QLabel(inner);
 	connect(save, &QPushButton::clicked, this, &Dock::saveSettings);
@@ -568,7 +552,6 @@ QWidget *Dock::buildSettingsTab()
 	layout->setContentsMargins(6, 8, 6, 6);
 	layout->addLayout(channelForm);
 	layout->addWidget(rules);
-	layout->addWidget(bot);
 	layout->addLayout(saveRow);
 	layout->addSpacing(8);
 	layout->addWidget(help);
@@ -591,9 +574,6 @@ void Dock::loadSettings()
 	m_maxQueue->setValue(c.maxQueue);
 	m_listSeconds->setValue(c.listSeconds);
 	m_offList->setChecked(c.allowOffList);
-	m_replies->setChecked(c.replies);
-	m_botUser->setText(c.botUser);
-	m_botToken->setText(c.botToken);
 }
 
 void Dock::saveSettings()
@@ -605,23 +585,14 @@ void Dock::saveSettings()
 		m_settingsSaved->setText(T("Settings.BadChannel"));
 		return;
 	}
-	const QString token = TwitchChat::cleanToken(m_botToken->text());
-	if (!m_botToken->text().trimmed().isEmpty() && token.isEmpty()) {
-		m_settingsSaved->setText(T("Settings.BadToken"));
-		return;
-	}
 	Settings c = m_store->settings();
 	c.channel = channel;
 	c.perUser = m_perUser->value();
 	c.maxQueue = m_maxQueue->value();
 	c.listSeconds = m_listSeconds->value();
 	c.allowOffList = m_offList->isChecked();
-	c.replies = m_replies->isChecked();
-	c.botUser = TwitchChat::cleanChannel(m_botUser->text());
-	c.botToken = token;
 	m_store->setSettings(c);
 	m_channel->setText(c.channel);
-	m_botUser->setText(c.botUser);
 	m_settingsSaved->setText(T("Settings.Saved"));
 	QTimer::singleShot(4000, m_settingsSaved, [label = m_settingsSaved]() { label->clear(); });
 }
@@ -809,14 +780,7 @@ void Dock::refreshChatStatus()
 		break;
 	case TwitchChat::State::Connected:
 		color = QStringLiteral("#3fb950");
-		if (m_chat->canSend())
-			text = T("Chat.Status.Bot").arg(m_chat->channel());
-		else if (m_chat->authFailed())
-			text = T("Chat.Status.BadToken").arg(m_chat->channel());
-		else if (!m_chat->secure() && m_store && !m_store->settings().botToken.isEmpty())
-			text = T("Chat.Status.NoTls").arg(m_chat->channel());
-		else
-			text = T("Chat.Status.ReadOnly").arg(m_chat->channel());
+		text = T("Chat.Status.ReadOnly").arg(m_chat->channel());
 		break;
 	}
 	m_chatStatus->setText(QStringLiteral("<span style='color:%1'>●</span> %2").arg(color, text.toHtmlEscaped()));

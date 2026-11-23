@@ -1,12 +1,9 @@
 #include "twitch-chat.hpp"
+#include "chat-link.hpp"
 
 #include <QDateTime>
 #include <QRandomGenerator>
 #include <QRegularExpression>
-#include <QTcpSocket>
-#if QT_CONFIG(ssl)
-#include <QSslSocket>
-#endif
 
 namespace acsl {
 
@@ -27,6 +24,14 @@ TwitchChat::TwitchChat(QObject *parent) : QObject(parent)
 		} else if (idle > 4 * 60 * 1000) {
 			write(QStringLiteral("PING :acsl"));
 		}
+	});
+
+	// Si en medio minuto no hay sesion (red caida a medias, servidor mudo), se reintenta.
+	m_connectTimer.setSingleShot(true);
+	m_connectTimer.setInterval(30 * 1000);
+	connect(&m_connectTimer, &QTimer::timeout, this, [this]() {
+		close();
+		scheduleRetry();
 	});
 
 	// Limite de Twitch para cuentas normales: 20 mensajes cada 30 s.
@@ -103,14 +108,14 @@ void TwitchChat::close()
 	m_retryTimer.stop();
 	m_pingTimer.stop();
 	m_sendTimer.stop();
+	m_connectTimer.stop();
 	m_outbox.clear();
-	m_buffer.clear();
 	m_authenticated = false;
-	if (m_socket) {
-		m_socket->disconnect(this);
-		m_socket->abort();
-		m_socket->deleteLater();
-		m_socket = nullptr;
+	if (m_link) {
+		m_link->disconnect(this);
+		m_link->stop();
+		m_link->deleteLater();
+		m_link = nullptr;
 	}
 }
 
@@ -122,41 +127,38 @@ void TwitchChat::open()
 	setState(State::Connecting);
 	m_lastData = QDateTime::currentMSecsSinceEpoch();
 
-	// Solo para pruebas: ACSL_IRC_TEST_PORT=6667 conecta a un servidor de chat simulado
-	// en este mismo equipo en lugar de a Twitch.
+	// Solo para pruebas: servidores de chat simulados en este mismo equipo.
 	const int testPort = qEnvironmentVariableIntValue("ACSL_IRC_TEST_PORT");
-	if (testPort > 0) {
-		m_secure = true; // no sale del equipo
-		m_socket = new QTcpSocket(this);
-		connect(m_socket, &QAbstractSocket::connected, this, &TwitchChat::onConnected);
-		connect(m_socket, &QAbstractSocket::readyRead, this, &TwitchChat::onReadyRead);
-		connect(m_socket, &QAbstractSocket::disconnected, this, &TwitchChat::onClosed);
-		connect(m_socket, &QAbstractSocket::errorOccurred, this, &TwitchChat::onClosed);
-		m_socket->connectToHost(QStringLiteral("127.0.0.1"), quint16(testPort));
-		return;
-	}
+	const int nativeTestPort = qEnvironmentVariableIntValue("ACSL_NATIVE_TEST_PORT");
+	const QString host = QString::fromLatin1(kHost);
 
-#if QT_CONFIG(ssl)
-	if (QSslSocket::supportsSsl()) {
-		auto *ssl = new QSslSocket(this);
-		m_socket = ssl;
-		m_secure = true;
-		connect(ssl, &QSslSocket::encrypted, this, &TwitchChat::onConnected);
-		connect(ssl, &QAbstractSocket::readyRead, this, &TwitchChat::onReadyRead);
-		connect(ssl, &QAbstractSocket::disconnected, this, &TwitchChat::onClosed);
-		connect(ssl, &QAbstractSocket::errorOccurred, this, &TwitchChat::onClosed);
-		ssl->connectToHostEncrypted(QString::fromLatin1(kHost), 6697);
-		return;
+	if (testPort > 0) {
+		m_link = new QtLink(QtLink::Mode::LocalTest, QStringLiteral("127.0.0.1"), quint16(testPort), this);
+		m_transport = QStringLiteral("prueba");
+	} else if (nativeTestPort > 0) {
+		m_link = new NativeLink([nativeTestPort]() { return NativeConn::createLocalTest(nativeTestPort); }, this);
+		m_transport = QStringLiteral("prueba");
+	} else if (QtLink::tlsAvailable() && !qEnvironmentVariableIsSet("ACSL_NO_QT_TLS")) {
+		m_link = new QtLink(QtLink::Mode::Tls, host, 6697, this);
+		m_transport = QStringLiteral("qt-tls");
+	} else if (NativeConn::available()) {
+		// El Qt de OBS en Windows y macOS no trae TLS: se usa la red segura del sistema.
+		m_link = new NativeLink([]() { return NativeConn::createTwitch(); }, this);
+		m_transport = QStringLiteral("sistema");
+	} else {
+		// Ultimo recurso, sin cifrar: solo lectura anonima (nunca se envia el token asi).
+		m_link = new QtLink(QtLink::Mode::Plain, host, 6667, this);
+		m_transport = QStringLiteral("sin-cifrar");
 	}
-#endif
-	// Sin TLS disponible: conexion sin cifrar, solo anonima (nunca mandamos el token asi).
-	m_secure = false;
-	m_socket = new QTcpSocket(this);
-	connect(m_socket, &QAbstractSocket::connected, this, &TwitchChat::onConnected);
-	connect(m_socket, &QAbstractSocket::readyRead, this, &TwitchChat::onReadyRead);
-	connect(m_socket, &QAbstractSocket::disconnected, this, &TwitchChat::onClosed);
-	connect(m_socket, &QAbstractSocket::errorOccurred, this, &TwitchChat::onClosed);
-	m_socket->connectToHost(QString::fromLatin1(kHost), 6667);
+	m_secure = m_link->secure();
+	connect(m_link, &ChatLink::opened, this, &TwitchChat::onConnected);
+	connect(m_link, &ChatLink::closed, this, &TwitchChat::onClosed);
+	connect(m_link, &ChatLink::lineReceived, this, [this](const QString &line) {
+		m_lastData = QDateTime::currentMSecsSinceEpoch();
+		handleLine(line);
+	});
+	m_connectTimer.start();
+	m_link->start();
 }
 
 void TwitchChat::onConnected()
@@ -174,7 +176,7 @@ void TwitchChat::onConnected()
 
 void TwitchChat::onClosed()
 {
-	if (!m_socket)
+	if (!m_link)
 		return;
 	close();
 	scheduleRetry();
@@ -195,32 +197,8 @@ void TwitchChat::scheduleRetry()
 
 void TwitchChat::write(const QString &line)
 {
-	if (!m_socket || m_socket->state() != QAbstractSocket::ConnectedState)
-		return;
-	m_socket->write(line.toUtf8() + "\r\n");
-}
-
-void TwitchChat::onReadyRead()
-{
-	if (!m_socket)
-		return;
-	m_lastData = QDateTime::currentMSecsSinceEpoch();
-	m_buffer.append(m_socket->readAll());
-	if (m_buffer.size() > 1024 * 1024) { // nunca deberia pasar
-		m_buffer.clear();
-		return;
-	}
-	int nl;
-	while ((nl = m_buffer.indexOf('\n')) >= 0) {
-		QByteArray raw = m_buffer.left(nl);
-		m_buffer.remove(0, nl + 1);
-		if (raw.endsWith('\r'))
-			raw.chop(1);
-		if (!raw.isEmpty())
-			handleLine(QString::fromUtf8(raw));
-		if (!m_socket)
-			return; // handleLine cerro la conexion
-	}
+	if (m_link)
+		m_link->sendLine(line);
 }
 
 static QString unescapeTag(const QString &v)
@@ -325,6 +303,7 @@ void TwitchChat::handleLine(const QString &line)
 	if (command == QLatin1String("001")) { // sesion aceptada
 		write(QStringLiteral("JOIN #") + m_channel);
 		m_attempt = 0;
+		m_connectTimer.stop();
 		m_pingTimer.start();
 		m_sendTimer.start();
 		setState(State::Connected);

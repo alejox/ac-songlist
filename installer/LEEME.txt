@@ -35,7 +35,8 @@ PRIMEROS PASOS
    (boton "CSV"), por ejemplo el que exporta StreamerSonglist.
 
 2. CHAT. Pestana "Ajustes": escribe el nombre de tu canal de Twitch y pulsa
-   "Guardar y conectar". No hace falta iniciar sesion para leer los pedidos.
+   "Guardar y conectar". No hace falta iniciar sesion ni ningun token. Arriba
+   del panel debe aparecer un punto verde y "conectado, leyendo pedidos".
 
 3. OVERLAY. En tu escena: Fuentes > + > "AC Songlist". En sus propiedades
    elige que mostrar:
@@ -55,12 +56,8 @@ PRIMEROS PASOS
 
 COMANDOS DEL CHAT
 -----------------
-  !sr <numero o nombre>   pedir una cancion       (tambien !pedir, !request)
-  !lista                  mostrar la lista        (tambien !canciones, !list)
-  !cola                   ver la cola             (tambien !queue)
-  !cancion                que suena ahora         (tambien !song)
-  !siguiente              cual viene despues      (tambien !next)
-  !mipedido               en que puesto voy       (tambien !posicion)
+  !sr <numero o nombre>   pedir una cancion        (tambien !pedir, !request)
+  !lista                  mostrar la lista         (tambien !canciones, !list)
   !quitar                 retirar mi ultimo pedido (tambien !wrongsong, !ws)
 
   Solo streamer y moderadores:
@@ -68,17 +65,8 @@ COMANDOS DEL CHAT
   !tocada                 terminar la actual y pasar a la siguiente
   !saltar                 quitar la actual sin contarla
 
-
-QUE EL PLUGIN CONTESTE EN EL CHAT (opcional)
---------------------------------------------
-Sin configurar nada mas, el plugin lee los pedidos pero no escribe en el chat.
-Para que responda ("entro a la cola en el puesto 3"), en Ajustes pon una cuenta
-de Twitch (la tuya o la de un bot) y su token OAuth con permisos chat:read y
-chat:edit. El token se guarda solo en tu equipo.
-
-AVISO: por ahora las respuestas solo funcionan en Linux. El OBS de Windows y
-de macOS no incluye la conexion segura que hace falta: ahi el plugin lee los
-pedidos con normalidad, pero no escribe en el chat.
+El plugin no escribe en el chat: no necesita cuenta ni token de Twitch. El
+resultado de cada pedido se ve en el stream, en la cola y en la tarjeta.
 
 
 ATAJOS DE TECLADO

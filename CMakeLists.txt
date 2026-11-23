@@ -1,6 +1,9 @@
 cmake_minimum_required(VERSION 3.22)
 
-project(ac-songlist VERSION 1.0.0 LANGUAGES CXX)
+project(ac-songlist VERSION 1.1.0 LANGUAGES CXX)
+if(APPLE)
+  enable_language(OBJCXX)
+endif()
 
 option(ACSL_BUILD_PLUGIN "Compilar el plugin de OBS" ON)
 option(ACSL_BUILD_TESTS "Compilar las pruebas del nucleo" OFF)
@@ -37,8 +40,25 @@ add_library(acsl-core STATIC
   src/core/csv.hpp src/core/csv.cpp
   src/core/bot.hpp src/core/bot.cpp
   src/chat/twitch-chat.hpp src/chat/twitch-chat.cpp
+  src/chat/chat-link.hpp src/chat/chat-link.cpp
+  src/chat/native-conn.hpp
   src/overlay/renderer.hpp src/overlay/renderer.cpp)
 target_link_libraries(acsl-core PUBLIC Qt6::Core Qt6::Gui Qt6::Network)
+
+# Conexion segura con la red del sistema (el Qt de OBS en Windows y macOS no trae TLS)
+find_package(Threads REQUIRED)
+target_link_libraries(acsl-core PUBLIC Threads::Threads)
+if(WIN32)
+  target_sources(acsl-core PRIVATE src/chat/native-conn-win.cpp)
+  target_link_libraries(acsl-core PUBLIC winhttp)
+else()
+  target_sources(acsl-core PRIVATE src/chat/native-conn-posix.cpp)
+  if(APPLE)
+    target_sources(acsl-core PRIVATE src/chat/native-conn-mac.mm)
+    set_source_files_properties(src/chat/native-conn-mac.mm PROPERTIES COMPILE_FLAGS "-fobjc-arc" SKIP_AUTOMOC ON)
+    target_link_libraries(acsl-core PUBLIC "-framework Network" "-framework Foundation")
+  endif()
+endif()
 target_include_directories(acsl-core PUBLIC src)
 target_compile_definitions(acsl-core PUBLIC QT_NO_CAST_TO_ASCII ACSL_VERSION="${PROJECT_VERSION}")
 
@@ -102,4 +122,8 @@ if(ACSL_BUILD_TESTS)
 
   add_executable(acsl-render tests/render-samples.cpp)
   target_link_libraries(acsl-render PRIVATE acsl-core)
+
+  # Conexion real con Twitch (necesita internet; no se ejecuta con ctest)
+  add_executable(acsl-nettest tests/net-test.cpp)
+  target_link_libraries(acsl-nettest PRIVATE acsl-core)
 endif()

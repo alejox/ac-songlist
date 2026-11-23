@@ -22,7 +22,7 @@ Plugin nativo de OBS (C++/Qt) para streamers que tocan en directo. Sin servicios
   - *Cola de pedidos*: los siguientes pedidos y quién los pidió.
   - *Lista de canciones*: la biblioteca numerada, por páginas. Puede estar siempre visible o aparecer solo cuando alguien escribe `!lista`.
 - **Estilo neutro y configurable** desde las propiedades de la fuente: tipografía, tamaño, colores de texto, acento y fondo, opacidad (0 = sin fondo), esquinas, márgenes, alineación, encabezado, filas y columnas.
-- **Chat de Twitch** sin iniciar sesión para leer pedidos; opcionalmente una cuenta de bot para que conteste (de momento solo en Linux, ver más abajo).
+- **Chat de Twitch** sin iniciar sesión ni tokens: solo escribes el nombre de tu canal. La conexión va cifrada y es de solo lectura.
 - **Atajos de teclado** en *Ajustes → Atajos*: siguiente canción, terminar la actual, abrir/cerrar pedidos, mostrar la lista.
 
 ![Cola y lista](docs/cola-y-lista.png)
@@ -52,23 +52,14 @@ Después abre OBS y activa el panel en *Paneles → AC Songlist*.
 |---|---|---|
 | `!sr <número o nombre>` | `!pedir`, `!request` | Pide una canción |
 | `!lista` | `!canciones`, `!list` | Muestra la lista en pantalla |
-| `!cola` | `!queue` | Dice los próximos pedidos |
-| `!cancion` | `!song` | Dice qué suena ahora |
-| `!siguiente` | `!next` | Dice cuál viene después |
-| `!mipedido` | `!posicion` | Dice en qué puesto va tu pedido |
 | `!quitar` | `!wrongsong`, `!ws` | Retira tu último pedido |
 | `!abrir` / `!cerrar` | `!sropen` / `!srclose` | Abre o cierra pedidos (streamer y mods) |
 | `!tocada` | `!srnext` | Termina la actual y pasa a la siguiente (streamer y mods) |
 | `!saltar` | `!srskip` | Quita la actual sin contarla (streamer y mods) |
 
+El plugin no escribe en el chat: el resultado de cada pedido se ve en el stream (en la cola y en la tarjeta).
+
 La búsqueda por nombre tolera acentos, mayúsculas, palabras sueltas y erratas pequeñas (`!sr sientist coldplay` encuentra *The Scientist*). Si dos personas piden la misma canción, la segunda se suma al pedido en vez de duplicarlo.
-
-### Responder en el chat (opcional)
-
-Para leer pedidos no hace falta nada más. Para que el plugin conteste («entró a la cola en el puesto 3»), pon en *Ajustes* una cuenta de Twitch y su token OAuth con permisos `chat:read` y `chat:edit`.
-
-> **Por ahora las respuestas solo funcionan en Linux.** El OBS oficial de Windows y de macOS no incluye el componente de conexión segura de Qt, y el plugin nunca envía el token sin cifrar. En esos sistemas lee los pedidos con normalidad, pero no escribe en el chat; el panel lo indica como «solo lectura».
- El token se guarda en tu equipo, en el archivo de datos del plugin, sin cifrar (igual que OBS guarda tu clave de retransmisión): no compartas ese archivo.
 
 ### Importar canciones (CSV)
 
@@ -113,14 +104,13 @@ En Windows y macOS lo compila [el flujo de GitHub Actions](.github/workflows/bui
 | Carpeta | Contenido |
 |---|---|
 | `src/core/` | Biblioteca, cola, búsqueda, CSV y comandos de chat. Solo QtCore, con pruebas. |
-| `src/chat/` | Cliente del chat de Twitch (IRC). |
+| `src/chat/` | Cliente del chat de Twitch (IRC cifrado). En Windows y macOS usa la red del sistema (WinHTTP / Network.framework), porque el Qt que trae OBS ahí no incluye TLS. |
 | `src/overlay/` | Dibujado del overlay y la fuente de vídeo de OBS. |
 | `src/ui/` | Panel acoplable. |
-| `tests/` | Pruebas del núcleo y generador de imágenes de muestra. |
+| `tests/` | Pruebas del núcleo (con un servidor de chat simulado), prueba de conexión real con Twitch y generador de imágenes de muestra. |
 
 ## Límites conocidos
 
-- Solo lee el chat de **Twitch** (no Kick ni YouTube).
-- En **Windows y macOS no contesta en el chat** (falta la conexión segura de Qt dentro de OBS); leer pedidos sí funciona.
+- Solo lee el chat de **Twitch** (no Kick ni YouTube), y no escribe en él.
 - No tiene página web pública de la lista: el público la ve en el stream con `!lista`.
 - Probado dentro de OBS 30 en Linux. Las versiones de Windows y macOS se compilan y pasan las pruebas del núcleo en GitHub Actions, pero no se han ejecutado dentro de OBS en esos sistemas antes de publicarlas aquí: si algo falla al cargarlo, el registro de OBS (*Ayuda → Archivos de registro*) lo dirá en las líneas `[ac-songlist]`.
