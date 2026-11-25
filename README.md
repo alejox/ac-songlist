@@ -77,7 +77,7 @@ En **Ajustes → Página web pública**, marca **Publicar mi lista en la web** y
 - La primera vez, el plugin genera una clave secreta que queda guardada en tu equipo: es la que demuestra que esa lista es tuya. Si reinstalas OBS en otro ordenador, copia también el archivo de datos (ver más abajo) o no podrás actualizar esa página.
 - Al desmarcar la opción y guardar, tu lista se borra de la web.
 
-El servicio y la página están en [`web/`](web/): un esquema de base de datos para Supabase ([`web/supabase/schema.sql`](web/supabase/schema.sql)) y una página estática que se publica con GitHub Pages.
+El servicio y la página están en [`web/`](web/): un esquema de base de datos para Supabase ([`web/supabase/schema.sql`](web/supabase/schema.sql)) y una página estática sin paso de compilación, que se despliega en Vercel tomando `web` como carpeta raíz.
 
 ### Importar canciones (CSV)
 
