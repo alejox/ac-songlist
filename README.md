@@ -69,6 +69,8 @@ La búsqueda por nombre tolera acentos, mayúsculas, palabras sueltas y erratas 
 
 ### Página web pública
 
+![Página web pública](docs/web.png)
+
 En **Ajustes → Página web pública**, marca **Publicar mi lista en la web** y pulsa **Guardar y conectar**. Aparece el enlace de tu página (`https://ac-songlist.vercel.app/?canal=tu_canal`) con un botón para copiarlo.
 
 - La página muestra el catálogo completo, la canción que suena y la cola, y se pone al día sola.
