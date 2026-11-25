@@ -592,7 +592,9 @@ static void testUpdater()
 
 	// donde esta instalado
 	const QString module = "/x/obs/plugins/" + Updater::payloadName() + "/" + Updater::binaryInPayload();
-	CHECK_EQ(Updater::rootForModule(module), QString("/x/obs/plugins/" + Updater::payloadName()));
+	// (en Windows una ruta que empieza por "/" lleva delante la letra de la unidad)
+	CHECK_EQ(Updater::rootForModule(module),
+		 QDir::fromNativeSeparators(QFileInfo("/x/obs/plugins/" + Updater::payloadName()).absoluteFilePath()));
 	CHECK(Updater::rootForModule("/usr/lib/obs-plugins/ac-songlist.so").isEmpty()); // instalado de otra forma
 	CHECK(Updater::rootForModule("").isEmpty());
 
