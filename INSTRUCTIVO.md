@@ -67,21 +67,21 @@ En tu escena: **Fuentes → + → AC Songlist**. Al crearla se abren sus propied
 | **Sonando ahora** | Tarjeta con la canción que estás tocando y quién la pidió. Si no suena nada, no se ve. |
 | **Cola de pedidos** | Los próximos pedidos, en orden, con quién los hizo. |
 | **Lista de canciones** | Tu biblioteca numerada, por páginas. |
-| **Barra inferior** | Las tres cosas en una sola fuente: lista (izquierda), sonando ahora (centro) y cola (derecha). |
+| **Barra inferior** | Las tres cosas en una sola franja: sonando ahora (izquierda), lista (centro) y cola (derecha). |
 
 Puedes agregar la fuente **varias veces**, una por cada modo, y colocar cada una donde quieras.
 
 **Recomendado para la lista:** activa **«Mostrar solo cuando alguien escribe !lista»**. Así no ocupa pantalla todo el tiempo y aparece cuando la piden.
 
-**Barra inferior.** Si eliges **Barra inferior (lista · sonando · cola)** no necesitas más fuentes: una sola dibuja tres paneles translúcidos, tipo cristal, pensados para el pie de la pantalla.
+**Barra inferior.** Si eliges **Barra inferior (sonando · lista · cola)** no necesitas más fuentes: una sola dibuja una franja translúcida, tipo cristal, de borde a borde, pensada para el pie de la pantalla. Las partes van juntas, separadas solo por una línea fina:
 
-- A la izquierda, la **lista de canciones**, que va pasando de página sola.
-- En el centro, **Sonando ahora**, con un disco que gira mientras tocas.
+- A la izquierda, **Sonando ahora**, con un disco que gira mientras suena la canción.
+- En el centro, la **lista de canciones**, que va pasando de página sola.
 - A la derecha, la **cola de pedidos**.
 
-Cada panel se enciende o se apaga desde el panel AC Songlist, con las casillas **Barra: Lista · Sonando · Cola** (están debajo de «Sonando ahora»). El cambio se ve al instante en el stream, con un fundido, y los otros paneles no se mueven de su sitio.
+Cada parte se enciende o se apaga desde el panel AC Songlist, con las casillas **Barra: Sonando · Lista · Cola** (están debajo de «Sonando ahora»). Las que quedan encendidas se reparten todo el ancho; si apagas la lista, por ejemplo, la cola se pone a su lado.
 
-En las propiedades de la fuente puedes cambiar el ancho y el alto (por defecto 1920 × 200; a más alto, más filas), el **ancho del panel central**, el color y la opacidad del cristal, el color de acento, las columnas de la lista y cada cuántos segundos cambia de página. El panel central solo aparece mientras hay una canción sonando.
+En las propiedades de la fuente puedes cambiar el ancho y el alto (por defecto 1920 × 200; a más alto, más filas), el **ancho de «Sonando ahora»**, el color y la opacidad del cristal, el color de acento, las columnas de la lista y cada cuántos segundos cambia de página. «Sonando ahora» no desaparece al terminar una canción: el disco se detiene y se queda toda su información (título, artista y quién la pidió) con el rótulo **Última canción**, hasta que empiece la siguiente.
 
 **Skins.** En las propiedades de la fuente, **Skin** permite elegir entre *Minimalista* y tres retro: *casete*, *equipo de sonido* y *vinilo*. Los retro tienen su propia paleta y solo toman tu **color de acento**; si no quieres movimiento, desmarca **Animar**.
 

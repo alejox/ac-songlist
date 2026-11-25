@@ -11,7 +11,7 @@
 namespace acsl {
 
 struct OverlayStyle {
-	// Bar: una sola fuente con tres paneles de cristal (lista, sonando ahora y cola).
+	// Bar: una sola franja de cristal con sonando ahora, la lista y la cola.
 	enum Mode { NowPlaying = 0, Queue = 1, SongList = 2, Bar = 3 };
 	enum BarSection { BarList = 0, BarNow = 1, BarQueue = 2 };
 	enum Align { Left = 0, Center = 1, Right = 2 };
@@ -53,7 +53,7 @@ struct OverlayStyle {
 
 	int rows = 6;    // filas de la cola / de la lista
 	int columns = 2; // columnas de la lista
-	int barCenterPercent = 34; // barra: ancho del panel central, en % del total
+	int barCenterPercent = 34; // barra: ancho de "sonando ahora", en % del total
 };
 
 struct OverlayRow {
@@ -65,6 +65,8 @@ struct OverlayRow {
 
 struct OverlayData {
 	bool hasPlaying = false;
+	// barra: no suena nada pero se sigue mostrando la ultima cancion (con el disco quieto)
+	bool lastSong = false;
 	QString title;
 	QString artist;
 	QStringList requesters;
@@ -80,12 +82,14 @@ struct OverlayData {
 	bool requestsOpen = true;
 	QString webUrl; // direccion de la pagina publica, sin "https://"; vacio = no publicada
 
-	// barra: opacidad de cada panel (lista, sonando, cola); 0 = apagado
+	// barra, por parte (lista, sonando, cola): si ocupa sitio y con que opacidad se ve
+	// (una parte que cambia de contenido se desvanece sin dejar su hueco)
+	bool sectionOn[3] = {true, true, true};
 	double section[3] = {1.0, 1.0, 1.0};
 
 	// textos ya traducidos
 	QString lblNowPlaying, lblQueue, lblSongList, lblRequestedBy, lblHowTo, lblMore, lblClosed, lblEmptyQueue,
-		lblEmptyList, lblWeb, lblSongs;
+		lblEmptyList, lblWeb, lblSongs, lblLastSong;
 };
 
 // Lo que no cambia de un fotograma al siguiente (paneles y texto de la barra) se guarda aqui

@@ -175,7 +175,7 @@ Dock::Dock(Store *store, TwitchChat *chat, Publisher *publisher, QWidget *parent
 	barLabel->setToolTip(T("Dock.Bar.Tip"));
 	barRow->addWidget(barLabel);
 	const char *barKeys[3] = {"Dock.Bar.List", "Dock.Bar.Now", "Dock.Bar.Queue"};
-	for (int i = 0; i < 3; i++) {
+	for (int i : {1, 0, 2}) { // en el orden en que se ven: sonando, lista, cola
 		m_barSection[i] = new QCheckBox(T(barKeys[i]), this);
 		m_barSection[i]->setToolTip(T("Dock.Bar.Tip"));
 		connect(m_barSection[i], &QCheckBox::toggled, this, [this, i](bool on) {

@@ -305,7 +305,7 @@ struct NowText {
 NowText nowText(const OverlayStyle &s, const OverlayData &d)
 {
 	NowText n;
-	n.idle = !d.hasPlaying;
+	n.idle = !d.hasPlaying && !d.lastSong;
 	if (n.idle && s.idleText.trimmed().isEmpty())
 		return n;
 	n.visible = true;
@@ -317,8 +317,12 @@ NowText nowText(const OverlayStyle &s, const OverlayData &d)
 			const QString by = d.lblRequestedBy.arg(d.requesters.join(QStringLiteral(", ")));
 			n.sub = n.sub.isEmpty() ? by : n.sub + kDot + by;
 		}
-		if (s.showLabel)
-			n.label = (s.label.trimmed().isEmpty() ? d.lblNowPlaying : s.label.trimmed()).toUpper();
+		if (s.showLabel) {
+			if (d.lastSong && !d.lblLastSong.isEmpty())
+				n.label = d.lblLastSong.toUpper();
+			else
+				n.label = (s.label.trimmed().isEmpty() ? d.lblNowPlaying : s.label.trimmed()).toUpper();
+		}
 	}
 	return n;
 }
@@ -872,9 +876,10 @@ void drawSongList(QPainter &p, const OverlayStyle &s, const OverlayData &d)
 }
 
 // ----------------------------------------------------------------------- barra
-// Una sola fuente, pensada para el pie de la pantalla: tres paneles de cristal con la
-// lista de canciones (izquierda), lo que suena (centro) y la cola (derecha). Cada panel
-// se enciende y se apaga desde el panel de OBS.
+// Una sola fuente, pensada para el pie de la pantalla: una franja de cristal de borde a
+// borde con lo que suena (izquierda), la lista de canciones (centro) y la cola (derecha),
+// separados por lineas finas. Cada parte se enciende y se apaga desde el panel de OBS;
+// las que quedan encendidas se reparten el ancho.
 
 const double kBarListScale = 0.44;  // letra de la lista respecto al titulo
 const double kBarQueueScale = 0.5;  // letra de la cola
@@ -888,28 +893,41 @@ OverlayStyle clamped(const OverlayStyle &style)
 	return s;
 }
 
+// Orden en pantalla, de izquierda a derecha.
+const int kBarOrder[3] = {OverlayStyle::BarNow, OverlayStyle::BarList, OverlayStyle::BarQueue};
+
 struct BarGeom {
 	double f = 0;   // tamano del titulo; el resto de la letra sale de aqui
-	double pad = 0; // margen interior de cada panel
+	double pad = 0; // margen interior de cada parte
 	double headerH = 0, listRowH = 0, queueRowH = 0;
-	QRectF left, center, right;
+	QRectF panel;   // la franja entera
+	QRectF rect[3]; // cada parte (por BarSection); vacio si esta apagada
 	int listRows = 1, listCols = 1, queueRows = 1;
 };
 
-BarGeom barGeom(const OverlayStyle &s)
+BarGeom barGeom(const OverlayStyle &s, const bool on[3])
 {
 	BarGeom g;
 	g.f = qMax(10.0, qMin(double(s.fontSize), s.height * 0.22));
-	const double m = qMax(3.0, g.f * 0.16); // aire alrededor para la sombra
-	const double gap = g.f * 0.36;
-	const double h = qMax(8.0, s.height - m * 2);
-	const double total = qMax(24.0, s.width - m * 2 - gap * 2);
-	const double centerW = total * qBound(20, s.barCenterPercent, 60) / 100.0;
-	const double sideW = (total - centerW) / 2;
-	g.left = QRectF(m, m, sideW, h);
-	g.center = QRectF(m + sideW + gap, m, centerW, h);
-	g.right = QRectF(m + sideW + gap + centerW + gap, m, sideW, h);
+	const double h = s.height;
+	g.panel = QRectF(0, 0, s.width, h);
 	g.pad = qMin(double(qMax(s.padding, 6)), h * 0.16);
+
+	// "sonando" ocupa el porcentaje elegido; lista y cola se reparten el resto
+	const double nowShare = qBound(20, s.barCenterPercent, 60) / 100.0;
+	double weight[3] = {0, 0, 0};
+	weight[OverlayStyle::BarNow] = on[OverlayStyle::BarNow] ? nowShare : 0;
+	weight[OverlayStyle::BarList] = on[OverlayStyle::BarList] ? (1 - nowShare) / 2 : 0;
+	weight[OverlayStyle::BarQueue] = on[OverlayStyle::BarQueue] ? (1 - nowShare) / 2 : 0;
+	const double sum = weight[0] + weight[1] + weight[2];
+	double x = 0;
+	for (int idx : kBarOrder) {
+		if (weight[idx] <= 0 || sum <= 0)
+			continue;
+		const double w = s.width * weight[idx] / sum;
+		g.rect[idx] = QRectF(x, 0, w, h);
+		x += w;
+	}
 
 	const QFont labelFont = makeFont(s, g.f * 0.36, true, g.f * 0.07);
 	g.headerH = s.showLabel ? QFontMetricsF(labelFont).height() + g.f * 0.42 : 0;
@@ -918,60 +936,48 @@ BarGeom barGeom(const OverlayStyle &s)
 	const double innerH = h - g.pad * 2 - g.headerH;
 	g.listRows = qMax(1, int((innerH + 1.0) / g.listRowH));
 	g.queueRows = qMax(1, int((innerH + 1.0) / g.queueRowH));
-	// las columnas pedidas, salvo que quedaran demasiado estrechas para leerse
-	g.listCols = qBound(1, s.columns, qMax(1, int((sideW - g.pad * 2) / (g.f * 5.5))));
+	// las columnas pedidas, salvo que quedaran demasiado estrechas para leerse con las
+	// tres partes encendidas (asi la pagina no cambia de tamano al apagar una)
+	const double listW = s.width * (1 - nowShare) / 2;
+	g.listCols = qBound(1, s.columns, qMax(1, int((listW - g.pad * 2) / (g.f * 5.5))));
 	return g;
 }
 
-// Panel translucido con brillo arriba y un borde de luz, como un cristal esmerilado.
-// (Una fuente de OBS no ve lo que tiene detras, asi que no puede desenfocarlo.)
-void drawGlass(QPainter &p, const OverlayStyle &s, const QRectF &rect, double f)
+// La franja: cristal translucido con brillo arriba, un filo de luz en el borde superior y
+// lineas finas entre las partes. (Una fuente de OBS no ve lo que tiene detras, asi que
+// no puede desenfocarlo.)
+void drawBarBackground(QPainter &p, const OverlayStyle &s, const BarGeom &g)
 {
-	if (s.backgroundOpacity <= 0)
-		return;
-	const double r = qMin(double(s.radius), qMin(rect.width(), rect.height()) / 2.0);
-	QPainterPath path;
-	path.addRoundedRect(rect, r, r);
-
-	// sombra suave, solo por fuera para no oscurecer el cristal
-	p.save();
-	QPainterPath outside;
-	outside.addRect(rect.adjusted(-f, -f, f, f));
-	p.setClipPath(outside.subtracted(path));
-	const double spread = qMax(2.0, f * 0.14);
-	for (int i = 4; i >= 1; i--) {
-		const double e = spread * i / 4.0;
-		QPainterPath shadow;
-		shadow.addRoundedRect(rect.adjusted(-e, -e * 0.5, e, e), r + e, r + e);
-		p.fillPath(shadow, QColor(0, 0, 0, 14));
+	const QRectF r = g.panel;
+	if (s.backgroundOpacity > 0) {
+		QColor tint = s.backgroundColor;
+		tint.setAlphaF(qBound(0, s.backgroundOpacity, 100) / 100.0 * 0.7);
+		p.fillRect(r, tint);
+		QLinearGradient shine(r.topLeft(), r.bottomLeft());
+		shine.setColorAt(0.0, QColor(255, 255, 255, 40));
+		shine.setColorAt(0.4, QColor(255, 255, 255, 10));
+		shine.setColorAt(1.0, QColor(255, 255, 255, 0));
+		p.fillRect(r, shine);
+		const double edge = qMax(1.0, g.f * 0.04);
+		p.fillRect(QRectF(r.left(), r.top(), r.width(), edge), QColor(255, 255, 255, 110));
 	}
-	p.restore();
-
-	QColor tint = s.backgroundColor;
-	tint.setAlphaF(qBound(0, s.backgroundOpacity, 100) / 100.0 * 0.62);
-	p.fillPath(path, tint);
-
-	QLinearGradient shine(rect.topLeft(), rect.bottomLeft());
-	shine.setColorAt(0.0, QColor(255, 255, 255, 44));
-	shine.setColorAt(0.38, QColor(255, 255, 255, 12));
-	shine.setColorAt(1.0, QColor(255, 255, 255, 2));
-	p.fillPath(path, shine);
-
-	QLinearGradient edge(rect.topLeft(), rect.bottomLeft());
-	edge.setColorAt(0.0, QColor(255, 255, 255, 150));
-	edge.setColorAt(0.3, QColor(255, 255, 255, 56));
-	edge.setColorAt(1.0, QColor(255, 255, 255, 30));
-	const double w = qMax(1.0, f * 0.035);
-	p.setBrush(Qt::NoBrush);
-	p.setPen(QPen(QBrush(edge), w));
-	p.drawRoundedRect(rect.adjusted(w / 2, w / 2, -w / 2, -w / 2), qMax(0.0, r - w / 2), qMax(0.0, r - w / 2));
-	p.setPen(Qt::NoPen);
+	// separadores entre las partes encendidas
+	QColor line = s.textColor;
+	line.setAlpha(46);
+	const double lw = qMax(1.0, g.f * 0.03);
+	bool first = true;
+	for (int idx : kBarOrder) {
+		if (g.rect[idx].isEmpty())
+			continue;
+		if (!first)
+			p.fillRect(QRectF(g.rect[idx].left() - lw / 2, r.top() + g.pad, lw, r.height() - g.pad * 2), line);
+		first = false;
+	}
 }
 
 void drawBarList(QPainter &p, const OverlayStyle &s, const OverlayData &d, const BarGeom &g)
 {
-	drawGlass(p, s, g.left, g.f);
-	const QRectF inner = g.left.adjusted(g.pad, g.pad, -g.pad, -g.pad);
+	const QRectF inner = g.rect[OverlayStyle::BarList].adjusted(g.pad, g.pad, -g.pad, -g.pad);
 	double top = inner.top();
 	if (s.showLabel) {
 		// la direccion de la pagina web, para quien quiera ver la lista entera;
@@ -1021,26 +1027,30 @@ void drawBarList(QPainter &p, const OverlayStyle &s, const OverlayData &d, const
 // Capas de la barra: todo de una vez, solo lo quieto o solo lo que gira.
 enum BarLayer { BarAll, BarStill, BarMoving };
 
-void drawBarNow(QPainter &p, const OverlayStyle &s, const OverlayData &d, const BarGeom &g, double t, BarLayer layer)
+// El disco esta siempre; gira mientras suena algo (quien llama congela el reloj t al parar,
+// asi se queda quieto en la posicion en que estaba). El texto entra y sale con cada cancion
+// con su propio fundido (textOpacity).
+void drawBarNow(QPainter &p, const OverlayStyle &s, const OverlayData &d, const BarGeom &g, double t, BarLayer layer,
+		double textOpacity)
 {
-	const NowText n = nowText(s, d);
-	if (!n.visible)
-		return;
-	const QRectF inner = g.center.adjusted(g.pad, g.pad, -g.pad, -g.pad);
-	// el disco gira solo mientras suena algo
+	const QRectF inner = g.rect[OverlayStyle::BarNow].adjusted(g.pad, g.pad, -g.pad, -g.pad);
 	const double discR = qMin(inner.height() / 2, inner.width() * 0.2);
 	const QPointF c(inner.left() + discR, inner.center().y());
-	const double angle = (s.animate && !n.idle) ? t * 200.0 : 0.0;
+	const double angle = s.animate ? t * 200.0 : 0.0;
 	if (layer == BarMoving) {
 		drawDisc(p, c, discR, s.accentColor, angle, DiscPrint);
 		return;
 	}
-	drawGlass(p, s, g.center, g.f);
 	drawDisc(p, c, discR, s.accentColor, angle, layer == BarAll ? DiscAll : DiscStill);
 	p.setBrush(Qt::NoBrush);
 	p.setPen(QPen(QColor(255, 255, 255, 46), qMax(1.0, g.f * 0.03))); // canto de luz: separa el disco del cristal
 	p.drawEllipse(c, discR, discR);
 	p.setPen(Qt::NoPen);
+
+	const NowText n = nowText(s, d);
+	if (!n.visible || textOpacity <= 0.001)
+		return; // sin cancion (ni texto de espera): solo el disco
+	p.setOpacity(p.opacity() * textOpacity);
 
 	const double x = inner.left() + discR * 2 + g.f * 0.5;
 	const double w = qMax(8.0, inner.right() - x);
@@ -1068,8 +1078,7 @@ void drawBarNow(QPainter &p, const OverlayStyle &s, const OverlayData &d, const 
 
 void drawBarQueue(QPainter &p, const OverlayStyle &s, const OverlayData &d, const BarGeom &g)
 {
-	drawGlass(p, s, g.right, g.f);
-	const QRectF inner = g.right.adjusted(g.pad, g.pad, -g.pad, -g.pad);
+	const QRectF inner = g.rect[OverlayStyle::BarQueue].adjusted(g.pad, g.pad, -g.pad, -g.pad);
 	double y = inner.top();
 	if (s.showLabel) {
 		QString label = d.lblQueue;
@@ -1133,18 +1142,28 @@ void drawBarQueue(QPainter &p, const OverlayStyle &s, const OverlayData &d, cons
 
 void drawBar(QPainter &p, const OverlayStyle &style, const OverlayData &d, double opacity, double seconds, BarLayer layer = BarAll)
 {
-	const BarGeom g = barGeom(style);
+	const BarGeom g = barGeom(style, d.sectionOn);
+	if (g.rect[0].isEmpty() && g.rect[1].isEmpty() && g.rect[2].isEmpty())
+		return; // todo apagado: no se dibuja ni la franja
 	OverlayStyle s = style; // las cabeceras y demas piezas comunes se miden con la letra de la barra
 	s.fontSize = int(g.f + 0.5);
+	if (layer != BarMoving) {
+		p.setOpacity(qBound(0.0, opacity, 1.0));
+		drawBarBackground(p, s, g);
+	}
 	const auto visible = [&](int section) {
+		if (g.rect[section].isEmpty())
+			return false;
 		const double o = qBound(0.0, opacity, 1.0) * qBound(0.0, d.section[section], 1.0);
 		p.setOpacity(o);
 		return o > 0.001;
 	};
+	if (!g.rect[OverlayStyle::BarNow].isEmpty()) {
+		p.setOpacity(qBound(0.0, opacity, 1.0)); // el disco no se desvanece al cambiar de cancion
+		drawBarNow(p, s, d, g, seconds, layer, qBound(0.0, d.section[OverlayStyle::BarNow], 1.0));
+	}
 	if (layer != BarMoving && visible(OverlayStyle::BarList))
 		drawBarList(p, s, d, g);
-	if (visible(OverlayStyle::BarNow))
-		drawBarNow(p, s, d, g, seconds, layer);
 	if (layer != BarMoving && visible(OverlayStyle::BarQueue))
 		drawBarQueue(p, s, d, g);
 }
@@ -1154,13 +1173,13 @@ QString barKey(const OverlayStyle &s, const OverlayData &d, double opacity)
 {
 	const QChar sep(0x1f);
 	QString k = QString::number(s.width) + sep + QString::number(s.height) + sep + QString::number(int(opacity * 1000)) + sep;
-	for (double o : d.section)
-		k += QString::number(int(o * 1000)) + sep;
-	k += QString::number(d.hasPlaying) + sep + d.title + sep + d.artist + sep + d.requesters.join(QLatin1Char(',')) + sep +
+	for (int i = 0; i < 3; i++)
+		k += QString::number(int(d.section[i] * 1000)) + (d.sectionOn[i] ? QLatin1Char('+') : QLatin1Char('-')) + sep;
+	k += QString::number(d.hasPlaying) + QString::number(d.lastSong) + sep + d.title + sep + d.artist + sep + d.requesters.join(QLatin1Char(',')) + sep +
 	     QString::number(d.queueTotal) + sep + QString::number(d.songsTotal) + sep + QString::number(d.page) + sep +
 	     QString::number(d.pages) + sep + QString::number(d.requestsOpen) + sep + d.lblNowPlaying + sep + d.lblQueue + sep +
 	     d.lblSongList + sep + d.lblRequestedBy + sep + d.lblHowTo + sep + d.lblClosed + sep + d.lblEmptyQueue + sep +
-	     d.lblEmptyList + sep + d.lblWeb + sep + d.lblSongs + sep + d.webUrl + QChar(0x1e);
+	     d.lblEmptyList + sep + d.lblWeb + sep + d.lblSongs + sep + d.lblLastSong + sep + d.webUrl + QChar(0x1e);
 	for (const OverlayRow &r : d.queue)
 		k += QString::number(r.number) + sep + r.title + sep + r.artist + sep + r.requester + QChar(0x1e);
 	k += QChar(0x1d);
@@ -1173,7 +1192,8 @@ QString barKey(const OverlayStyle &s, const OverlayData &d, double opacity)
 
 BarLayout barLayout(const OverlayStyle &style)
 {
-	const BarGeom g = barGeom(clamped(style));
+	const bool all[3] = {true, true, true};
+	const BarGeom g = barGeom(clamped(style), all);
 	BarLayout b;
 	b.listRows = g.listRows;
 	b.listColumns = g.listCols;

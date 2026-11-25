@@ -48,6 +48,7 @@ static OverlayData sampleData()
 	d.lblEmptyList = QStringLiteral("A\u00fan no hay canciones");
 	d.lblWeb = "Lista completa: %1";
 	d.lblSongs = "Canciones";
+	d.lblLastSong = QStringLiteral("\u00daltima canci\u00f3n");
 	return d;
 }
 
@@ -197,13 +198,14 @@ int main(int argc, char **argv)
 	barLong.requesters = longData.requesters;
 	saveOnScene(renderOverlay(bar, barLong, 1.0, 1.1), dir + "/21-barra-titulo-largo.png");
 
-	OverlayData onlyNow = barData; // solo el panel central encendido
+	OverlayData onlyNow = barData; // sonando y cola: la cola ocupa el sitio de la lista
+	onlyNow.sectionOn[OverlayStyle::BarList] = false;
 	onlyNow.section[OverlayStyle::BarList] = 0;
-	onlyNow.section[OverlayStyle::BarQueue] = 0;
 	saveOnScene(renderOverlay(bar, onlyNow, 1.0, 2.0), dir + "/22-barra-solo-sonando.png");
 
 	OverlayData sides = barData; // nada sonando, cola vacia y pedidos cerrados
 	sides.hasPlaying = false;
+	sides.lastSong = true; // termino la cancion: se queda su informacion con el disco quieto
 	sides.queue.clear();
 	sides.queueTotal = 0;
 	sides.requestsOpen = false;

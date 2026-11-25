@@ -57,6 +57,7 @@ private:
 		QString sectionIdentity[3];
 		double sectionOpacity[3] = {0, 0, 0};
 		OverlayCache cache; // capa quieta de la barra
+		double discSeconds = 0; // reloj del disco: solo avanza mientras suena algo
 	};
 
 	void refresh();
@@ -77,6 +78,12 @@ private:
 	std::vector<View> m_views;
 	qint64 m_lastRefresh = 0;
 	qint64 m_startedAt = 0;
+	// ultima cancion que sono: la barra la sigue mostrando, con el disco quieto, hasta la siguiente
+	struct LastSong {
+		int id = 0;
+		QString title, artist;
+		QStringList requesters;
+	} m_lastSong;
 	qint64 m_listUntil = 0; // la lista "a pedido" se muestra hasta este momento
 	bool m_listRestart = false;
 };

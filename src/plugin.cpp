@@ -210,6 +210,7 @@ void Plugin::setLabels(OverlayData &d) const
 	d.lblEmptyList = T("Overlay.EmptyList");
 	d.lblWeb = T("Overlay.Web");
 	d.lblSongs = T("Overlay.Songs");
+	d.lblLastSong = T("Overlay.LastSong");
 	// la direccion solo se ensena cuando la lista esta de verdad en la web
 	if (m_publisher && m_publisher->state() == Publisher::State::Published)
 		d.webUrl = m_publisher->pageLabel();
@@ -306,17 +307,25 @@ bool Plugin::updateBar(View &view, qint64 now, double dtMs)
 	const QueueItem &playing = m_store.playing();
 	target.hasPlaying = playing.valid();
 	if (target.hasPlaying) {
-		target.title = playing.title;
-		target.artist = playing.artist;
-		target.requesters = playing.requesters();
+		m_lastSong = {playing.id, playing.title, playing.artist, playing.requesters()};
+	} else if (m_lastSong.title.isEmpty() && !m_store.history().isEmpty()) {
+		// recien abierto OBS: la ultima que se toco segun el historial
+		const HistoryItem &h = m_store.history().first();
+		m_lastSong = {-h.id, h.title, h.artist, h.requesters};
 	}
-	if (cfg.barNow) {
-		if (target.hasPlaying)
-			ids[OverlayStyle::BarNow] = QStringLiteral("np") + QChar(0x1f) + QString::number(playing.id) + QChar(0x1f) +
-						    target.title + QChar(0x1f) + target.artist;
-		else if (!s.idleText.trimmed().isEmpty())
-			ids[OverlayStyle::BarNow] = QStringLiteral("idle");
+	// "sonando" no se va al terminar la cancion: el disco se para y se queda toda la
+	// informacion de la ultima hasta que empiece otra
+	target.lastSong = !target.hasPlaying && !m_lastSong.title.isEmpty();
+	if (target.hasPlaying || target.lastSong) {
+		target.title = m_lastSong.title;
+		target.artist = m_lastSong.artist;
+		target.requesters = m_lastSong.requesters;
 	}
+	if (cfg.barNow)
+		ids[OverlayStyle::BarNow] = (target.hasPlaying || target.lastSong)
+						    ? QStringLiteral("np") + QChar(0x1f) + QString::number(m_lastSong.id) + QChar(0x1f) +
+							      target.title + QChar(0x1f) + target.artist
+						    : QStringLiteral("idle");
 
 	const QList<QueueItem> &queue = m_store.queue();
 	const int queueRows = barLayout(s).queueRows;
@@ -336,6 +345,7 @@ bool Plugin::updateBar(View &view, qint64 now, double dtMs)
 			d.songsTotal = target.songsTotal;
 		} else if (section == OverlayStyle::BarNow) {
 			d.hasPlaying = target.hasPlaying;
+			d.lastSong = target.lastSong;
 			d.title = target.title;
 			d.artist = target.artist;
 			d.requesters = target.requesters;
@@ -376,16 +386,19 @@ bool Plugin::updateBar(View &view, qint64 now, double dtMs)
 	view.identity = anyVisible ? QStringLiteral("bar") : QString();
 	view.opacity = anyVisible ? 1.0 : 0.0;
 
-	// el disco gira mientras el panel central esta en pantalla con una cancion sonando
+	// el disco gira mientras suena algo; al parar se queda donde estaba
 	const bool moving = s.animate && view.data.hasPlaying && !view.sectionIdentity[OverlayStyle::BarNow].isEmpty();
-	if (moving)
+	if (moving) {
 		animating = true;
+		view.discSeconds += dtMs / 1000.0;
+	}
 	const qint64 frame = moving ? now / 66 : 0;
 
 	const OverlayData &d = view.data;
 	QString sig = QStringLiteral("bar") + QString::number(view.styleVersion) + QChar(0x1d) + QString::number(frame) + QChar(0x1d) +
 		      d.title + QChar(0x1f) + d.artist + QChar(0x1f) + d.requesters.join(QLatin1Char(',')) + QChar(0x1f) +
-		      (d.hasPlaying ? QLatin1Char('1') : QLatin1Char('0')) + QChar(0x1d) + QString::number(d.queueTotal) + QChar(0x1f) +
+		      (d.hasPlaying ? QLatin1Char('1') : QLatin1Char('0')) + (d.lastSong ? QLatin1Char('1') : QLatin1Char('0')) + QChar(0x1d) +
+		      QString::number(d.queueTotal) + QChar(0x1f) +
 		      QString::number(d.songsTotal) + QChar(0x1f) + QString::number(d.page) + QChar(0x1f) + QString::number(d.pages) +
 		      QChar(0x1f) + (d.requestsOpen ? QLatin1Char('1') : QLatin1Char('0')) + QChar(0x1f) + d.webUrl + QChar(0x1d);
 	for (int i = 0; i < 3; i++)
@@ -399,11 +412,11 @@ bool Plugin::updateBar(View &view, qint64 now, double dtMs)
 	view.lastRender = sig;
 
 	for (int i = 0; i < 3; i++) { // ease-out, como en el resto de los modos
+		view.data.sectionOn[i] = !view.sectionIdentity[i].isEmpty();
 		const double o = view.sectionOpacity[i];
 		view.data.section[i] = view.sectionIdentity[i].isEmpty() ? 0.0 : 1.0 - (1.0 - o) * (1.0 - o);
 	}
-	const double seconds = double(now - m_startedAt) / 1000.0;
-	QImage image = renderOverlay(s, view.data, anyVisible ? 1.0 : 0.0, seconds, &view.cache);
+	QImage image = renderOverlay(s, view.data, anyVisible ? 1.0 : 0.0, view.discSeconds, &view.cache);
 	{
 		std::lock_guard<std::mutex> lock(view.shared->mutex);
 		view.shared->image = std::move(image);
