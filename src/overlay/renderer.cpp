@@ -877,7 +877,7 @@ void drawSongList(QPainter &p, const OverlayStyle &s, const OverlayData &d)
 
 // ----------------------------------------------------------------------- barra
 // Una sola fuente, pensada para el pie de la pantalla: una franja de cristal de borde a
-// borde con lo que suena (izquierda), la lista de canciones (centro) y la cola (derecha),
+// borde con lo que suena (izquierda), la cola (centro) y la lista de canciones (derecha),
 // separados por lineas finas. Cada parte se enciende y se apaga desde el panel de OBS;
 // las que quedan encendidas se reparten el ancho.
 
@@ -894,7 +894,7 @@ OverlayStyle clamped(const OverlayStyle &style)
 }
 
 // Orden en pantalla, de izquierda a derecha.
-const int kBarOrder[3] = {OverlayStyle::BarNow, OverlayStyle::BarList, OverlayStyle::BarQueue};
+const int kBarOrder[3] = {OverlayStyle::BarNow, OverlayStyle::BarQueue, OverlayStyle::BarList};
 
 struct BarGeom {
 	double f = 0;   // tamano del titulo; el resto de la letra sale de aqui

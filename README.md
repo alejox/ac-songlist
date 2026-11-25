@@ -24,7 +24,7 @@ Plugin nativo de OBS (C++/Qt) para streamers que tocan en directo. Sin servicios
   - *Barra inferior*: los tres anteriores juntos en una sola fuente (ver más abajo).
 - **Skins retro** además del minimalista: casete (con carretes que giran), equipo de sonido (display de puntos con ecualizador y marquesina) y vinilo (disco girando). Sirven para la tarjeta, la cola y la lista.
 - **Estilo neutro y configurable** desde las propiedades de la fuente: tipografía, tamaño, colores de texto, acento y fondo, opacidad (0 = sin fondo), esquinas, márgenes, alineación, encabezado, filas y columnas.
-- **Barra inferior**: una sola franja de cristal de borde a borde con «Sonando ahora» (con un disco que gira mientras suena y se detiene al terminar, dejando la información de la última canción), la lista de canciones y la cola de pedidos. Cada parte se enciende y se apaga con una casilla del panel, sin crear más fuentes.
+- **Barra inferior**: una sola franja de cristal de borde a borde con «Sonando ahora» (con un disco que gira mientras suena y se detiene al terminar, dejando la información de la última canción), la cola de pedidos y la lista de canciones. Cada parte se enciende y se apaga con una casilla del panel, sin crear más fuentes.
 - **Página web pública** (opcional): tu lista en una página que puedes compartir, con buscador y filtro por categoría, que se actualiza sola cuando agregas canciones y muestra lo que suena y la cola.
 - **Chat de Twitch** sin iniciar sesión ni tokens: solo escribes el nombre de tu canal. La conexión va cifrada y es de solo lectura.
 - **Atajos de teclado** en *Ajustes → Atajos*: siguiente canción, terminar la actual, abrir/cerrar pedidos, mostrar la lista y encender/apagar cada panel de la barra.
