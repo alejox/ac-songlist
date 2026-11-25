@@ -1,0 +1,10 @@
+# Vercel solo necesita la pagina (carpeta web/); el resto es el codigo del plugin.
+/src
+/tests
+/docs
+/data
+/installer
+/.github
+/web/supabase
+/CMakeLists.txt
+/*.md

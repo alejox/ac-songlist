@@ -5,4 +5,4 @@
 
 #define ACSL_WEB_API_URL "https://hwwlbtwltxsgathbxhpl.supabase.co"
 #define ACSL_WEB_API_KEY "sb_publishable_45u3nKuHEWOeHF7eB6s2IA_V3hwMzyM"
-#define ACSL_WEB_PAGE_URL "https://alejox.github.io/ac-songlist/"
+#define ACSL_WEB_PAGE_URL "https://ac-songlist.vercel.app/"

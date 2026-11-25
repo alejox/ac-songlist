@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.22)
 
-project(ac-songlist VERSION 1.2.0 LANGUAGES CXX)
+project(ac-songlist VERSION 1.3.0 LANGUAGES CXX)
 if(APPLE)
   enable_language(OBJCXX)
 endif()
