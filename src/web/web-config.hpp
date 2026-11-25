@@ -6,3 +6,6 @@
 #define ACSL_WEB_API_URL "https://hwwlbtwltxsgathbxhpl.supabase.co"
 #define ACSL_WEB_API_KEY "sb_publishable_45u3nKuHEWOeHF7eB6s2IA_V3hwMzyM"
 #define ACSL_WEB_PAGE_URL "https://ac-songlist.vercel.app/"
+
+// Ultima version publicada del plugin (para las actualizaciones automaticas).
+#define ACSL_UPDATE_API_URL "https://api.github.com/repos/alejox/ac-songlist/releases/latest"

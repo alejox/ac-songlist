@@ -62,7 +62,7 @@ void addDock()
 	auto *mainWindow = static_cast<QWidget *>(obs_frontend_get_main_window());
 	if (g_dockAdded || !plugin || !mainWindow)
 		return;
-	auto *dock = new acsl::Dock(plugin->store(), plugin->chat(), plugin->publisher(), mainWindow);
+	auto *dock = new acsl::Dock(plugin->store(), plugin->chat(), plugin->publisher(), plugin->updater(), mainWindow);
 	if (obs_frontend_add_dock_by_id("ac-songlist-dock", obs_module_text("Dock.Title"), dock))
 		g_dockAdded = true;
 	else

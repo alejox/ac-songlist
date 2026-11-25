@@ -100,6 +100,40 @@ Plugin::Plugin()
 	connect(m_publisher.get(), &Publisher::stateChanged, this, &Plugin::refresh); // la direccion sale en el overlay
 	blog(LOG_INFO, "[ac-songlist] pagina web publica: %s", m_publisher->available() ? "disponible" : "no disponible en esta version");
 
+	// Actualizaciones: se busca la ultima version publicada al poco de abrir OBS y despues cada
+	// pocas horas. La direccion se puede cambiar (o apagar con "off") solo para pruebas.
+	m_updater = std::make_unique<Updater>(QStringLiteral(ACSL_VERSION));
+	const QString updateApi = qEnvironmentVariable("ACSL_UPDATE_API_URL", QStringLiteral(ACSL_UPDATE_API_URL));
+	m_updater->setApiUrl(updateApi == QLatin1String("off") ? QString() : updateApi);
+	const QString modulePath = QString::fromUtf8(obs_get_module_binary_path(obs_current_module()));
+	const QString root = Updater::rootForModule(modulePath);
+	Updater::cleanup(root); // lo que aparto la actualizacion anterior ya no esta en uso
+	m_updater->setInstallRoot(root);
+	m_updater->setAutoInstall(m_store.settings().autoUpdate);
+	connect(&m_store, &Store::settingsChanged, this, [this]() { m_updater->setAutoInstall(m_store.settings().autoUpdate); });
+	connect(m_updater.get(), &Updater::stateChanged, this, [this]() {
+		const Updater *u = m_updater.get();
+		switch (u->state()) {
+		case Updater::State::Available:
+			blog(LOG_INFO, "[ac-songlist] hay una version nueva: %s", qUtf8Printable(u->latest().version));
+			break;
+		case Updater::State::Installed:
+			blog(LOG_INFO, "[ac-songlist] version %s instalada; se usara al reiniciar OBS", qUtf8Printable(u->installedVersion()));
+			break;
+		case Updater::State::Error:
+			blog(LOG_WARNING, "[ac-songlist] actualizacion: %s", qUtf8Printable(u->message()));
+			break;
+		default:
+			break;
+		}
+	});
+	if (m_updater->enabled())
+		m_updater->startSchedule(qEnvironmentVariableIntValue("ACSL_UPDATE_FIRST_MS") > 0 ? qEnvironmentVariableIntValue("ACSL_UPDATE_FIRST_MS") : 20000,
+					 6 * 60 * 60 * 1000);
+	blog(LOG_INFO, "[ac-songlist] actualizaciones: %s", !m_updater->enabled() ? "desactivadas"
+								    : root.isEmpty() ? "solo aviso (instalado fuera de la carpeta de plugins)"
+										     : qUtf8Printable(QDir::toNativeSeparators(root)));
+
 	m_startedAt = QDateTime::currentMSecsSinceEpoch();
 	m_bot = std::make_unique<Bot>(&m_store, [](const char *key) { return T(key); });
 
@@ -132,6 +166,7 @@ Plugin::Plugin()
 
 Plugin::~Plugin()
 {
+	m_updater.reset();
 	m_publisher.reset();
 	m_chat.stop();
 	saveNow();

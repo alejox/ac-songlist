@@ -7,7 +7,10 @@
 
 namespace acsl {
 
-HttpResult httpPostJson(const QUrl &url, const HttpHeaders &headers, const QByteArray &body, int timeoutMs)
+namespace detail {
+
+HttpResult httpRequest(const char *method, const QUrl &url, const HttpHeaders &headers, const QByteArray &body, int timeoutMs,
+		       qint64 maxBytes)
 {
 	auto result = std::make_shared<HttpResult>();
 	@autoreleasepool {
@@ -19,11 +22,11 @@ HttpResult httpPostJson(const QUrl &url, const HttpHeaders &headers, const QByte
 		NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:target
 								       cachePolicy:NSURLRequestReloadIgnoringLocalCacheData
 								   timeoutInterval:timeoutMs / 1000.0];
-		request.HTTPMethod = @"POST";
-		[request setValue:@"application/json" forHTTPHeaderField:@"Content-Type"];
+		request.HTTPMethod = QString::fromLatin1(method).toNSString(); // NSURLSession sigue solo las redirecciones
 		for (const auto &h : headers)
 			[request setValue:QString::fromLatin1(h.second).toNSString() forHTTPHeaderField:QString::fromLatin1(h.first).toNSString()];
-		request.HTTPBody = [NSData dataWithBytes:body.constData() length:NSUInteger(body.size())];
+		if (!body.isEmpty())
+			request.HTTPBody = [NSData dataWithBytes:body.constData() length:NSUInteger(body.size())];
 
 		NSURLSession *session = [NSURLSession sessionWithConfiguration:[NSURLSessionConfiguration ephemeralSessionConfiguration]];
 		dispatch_semaphore_t done = dispatch_semaphore_create(0);
@@ -33,9 +36,12 @@ HttpResult httpPostJson(const QUrl &url, const HttpHeaders &headers, const QByte
 									result->status = int([(NSHTTPURLResponse *)response statusCode]);
 									result->sent = result->status > 0;
 								}
-								if (data && data.length > 0)
-									result->body = QByteArray(static_cast<const char *>(data.bytes),
-												  int(MIN(data.length, NSUInteger(1024 * 1024))));
+								if (data && data.length > 0) {
+									const NSUInteger keep = MIN(data.length, NSUInteger(maxBytes));
+									result->body = QByteArray(static_cast<const char *>(data.bytes), int(keep));
+									if (keep < data.length)
+										result->error = QStringLiteral("respuesta demasiado grande");
+								}
 								if (error && !result->sent)
 									result->error = QString::fromNSString(error.localizedDescription);
 								dispatch_semaphore_signal(done);
@@ -54,6 +60,8 @@ HttpResult httpPostJson(const QUrl &url, const HttpHeaders &headers, const QByte
 	}
 	return *result;
 }
+
+} // namespace detail
 
 bool httpsAvailable()
 {

@@ -21,11 +21,12 @@ namespace acsl {
 
 class TwitchChat;
 class Publisher;
+class Updater;
 
 class Dock : public QWidget {
 	Q_OBJECT
 public:
-	Dock(Store *store, TwitchChat *chat, Publisher *publisher, QWidget *parent = nullptr);
+	Dock(Store *store, TwitchChat *chat, Publisher *publisher, Updater *updater, QWidget *parent = nullptr);
 
 private:
 	QWidget *buildQueueTab();
@@ -40,6 +41,7 @@ private:
 	void refreshHistory();
 	void refreshChatStatus();
 	void refreshWebStatus();
+	void refreshUpdate();
 	void loadSettings();
 	void saveSettings();
 	void setWebEnabled(bool on);
@@ -56,6 +58,7 @@ private:
 	QPointer<Store> m_store;
 	QPointer<TwitchChat> m_chat;
 	QPointer<Publisher> m_publisher;
+	QPointer<Updater> m_updater;
 	QTimer m_refreshTimer;
 
 	QLabel *m_chatStatus;
@@ -87,6 +90,13 @@ private:
 	QLabel *m_webTopLabel = nullptr;
 	QPushButton *m_webTopButton = nullptr;
 	bool m_webCopied = false;
+	// actualizaciones: aviso arriba (solo cuando hay algo que contar) y seccion en Ajustes
+	QWidget *m_updateRow = nullptr;
+	QLabel *m_updateLabel = nullptr;
+	QPushButton *m_updateButton = nullptr;
+	QCheckBox *m_autoUpdate = nullptr;
+	QLabel *m_updateStatus = nullptr;
+	QPushButton *m_updateCheck = nullptr;
 	QSpinBox *m_perUser, *m_maxQueue, *m_listSeconds;
 	QLabel *m_settingsSaved;
 };

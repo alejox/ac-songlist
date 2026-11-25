@@ -4,11 +4,13 @@
 #include "../core/csv.hpp"
 #include "../core/matcher.hpp"
 #include "../plugin-support.hpp"
+#include "../update/updater.hpp"
 #include "../web/publisher.hpp"
 
 #include <QCheckBox>
 #include <QClipboard>
 #include <QComboBox>
+#include <QDesktopServices>
 #include <QFile>
 #include <QFileDialog>
 #include <QFormLayout>
@@ -29,6 +31,7 @@
 #include <QTabWidget>
 #include <QTableWidget>
 #include <QToolButton>
+#include <QUrl>
 #include <QVBoxLayout>
 #include <QWheelEvent>
 
@@ -115,8 +118,8 @@ QPushButton *button(const QString &text, const QString &tip, QWidget *parent)
 
 } // namespace
 
-Dock::Dock(Store *store, TwitchChat *chat, Publisher *publisher, QWidget *parent)
-	: QWidget(parent), m_store(store), m_chat(chat), m_publisher(publisher)
+Dock::Dock(Store *store, TwitchChat *chat, Publisher *publisher, Updater *updater, QWidget *parent)
+	: QWidget(parent), m_store(store), m_chat(chat), m_publisher(publisher), m_updater(updater)
 {
 	setMinimumWidth(320);
 
@@ -202,6 +205,31 @@ Dock::Dock(Store *store, TwitchChat *chat, Publisher *publisher, QWidget *parent
 		webRow->addWidget(m_webTopButton);
 	}
 
+	// --- actualizacion: solo aparece cuando hay una version nueva o ya quedo instalada
+	if (updater) {
+		m_updateRow = new QWidget(this);
+		m_updateLabel = new QLabel(m_updateRow);
+		m_updateLabel->setTextFormat(Qt::RichText);
+		m_updateLabel->setWordWrap(true);
+		m_updateButton = new QPushButton(m_updateRow);
+		connect(m_updateButton, &QPushButton::clicked, this, [this]() {
+			if (!m_updater)
+				return;
+			const Updater::State st = m_updater->state();
+			const bool canRun = m_updater->canInstall() && !m_updater->latest().assetUrl.isEmpty();
+			if ((st == Updater::State::Available || st == Updater::State::Error) && canRun)
+				m_updater->install();
+			else if (!m_updater->latest().pageUrl.isEmpty())
+				QDesktopServices::openUrl(QUrl(m_updater->latest().pageUrl));
+		});
+		auto *updateLayout = new QHBoxLayout(m_updateRow);
+		updateLayout->setContentsMargins(0, 0, 0, 0);
+		updateLayout->addWidget(m_updateLabel, 1);
+		updateLayout->addWidget(m_updateButton);
+		m_updateRow->hide();
+		connect(updater, &Updater::stateChanged, this, &Dock::refreshUpdate);
+	}
+
 	// --- pestanas
 	m_tabs = new QTabWidget(this);
 	m_tabs->addTab(buildQueueTab(), T("Tab.Queue"));
@@ -216,6 +244,8 @@ Dock::Dock(Store *store, TwitchChat *chat, Publisher *publisher, QWidget *parent
 	layout->addLayout(barRow);
 	if (m_webTop)
 		layout->addWidget(m_webTop);
+	if (m_updateRow)
+		layout->addWidget(m_updateRow);
 	layout->addWidget(m_tabs, 1);
 
 	// varias modificaciones seguidas = un solo repintado
@@ -233,6 +263,7 @@ Dock::Dock(Store *store, TwitchChat *chat, Publisher *publisher, QWidget *parent
 	refresh();
 	refreshChatStatus();
 	refreshWebStatus();
+	refreshUpdate();
 	// biblioteca vacia: lo primero es crearla
 	if (store->songs().isEmpty())
 		m_tabs->setCurrentIndex(1);
@@ -621,6 +652,37 @@ QWidget *Dock::buildSettingsTab()
 		webLayout->addWidget(m_webStatus);
 	}
 
+	// Actualizaciones
+	QGroupBox *updates = nullptr;
+	if (m_updater) {
+		updates = new QGroupBox(T("Update.Title"), inner);
+		m_autoUpdate = new QCheckBox(T("Update.Auto"), updates);
+		m_autoUpdate->setToolTip(T("Update.Auto.Tip"));
+		connect(m_autoUpdate, &QCheckBox::toggled, this, [this](bool on) { // se aplica al momento
+			if (!m_store)
+				return;
+			Settings c = m_store->settings();
+			if (c.autoUpdate == on)
+				return;
+			c.autoUpdate = on;
+			m_store->setSettings(c);
+		});
+		m_updateStatus = new QLabel(updates);
+		m_updateStatus->setWordWrap(true);
+		m_updateStatus->setTextFormat(Qt::PlainText);
+		m_updateCheck = button(T("Update.CheckNow"), T("Update.CheckNow.Tip"), updates);
+		connect(m_updateCheck, &QPushButton::clicked, this, [this]() {
+			if (m_updater)
+				m_updater->check();
+		});
+		auto *checkRow = new QHBoxLayout;
+		checkRow->addWidget(m_updateStatus, 1);
+		checkRow->addWidget(m_updateCheck);
+		auto *updatesLayout = new QVBoxLayout(updates);
+		updatesLayout->addWidget(m_autoUpdate);
+		updatesLayout->addLayout(checkRow);
+	}
+
 	auto *save = button(T("Settings.Save"), T("Settings.Save.Tip"), inner);
 	m_settingsSaved = new QLabel(inner);
 	connect(save, &QPushButton::clicked, this, &Dock::saveSettings);
@@ -642,6 +704,8 @@ QWidget *Dock::buildSettingsTab()
 	layout->addWidget(rules);
 	if (web)
 		layout->addWidget(web);
+	if (updates)
+		layout->addWidget(updates);
 	layout->addLayout(saveRow);
 	layout->addSpacing(8);
 	layout->addWidget(help);
@@ -666,6 +730,10 @@ void Dock::loadSettings()
 	m_offList->setChecked(c.allowOffList);
 	if (m_webEnabled)
 		m_webEnabled->setChecked(c.webEnabled);
+	if (m_autoUpdate) {
+		const QSignalBlocker block(m_autoUpdate);
+		m_autoUpdate->setChecked(c.autoUpdate);
+	}
 }
 
 void Dock::saveSettings()
@@ -979,6 +1047,81 @@ void Dock::refreshWebStatus()
 	m_webTopLabel->setToolTip(on ? text + QStringLiteral("\n") + url : T("Web.Top.Publish.Tip"));
 	m_webTopButton->setText(m_webCopied ? T("Web.Copied") : on ? T("Web.Copy") : T("Web.Top.Publish"));
 	m_webTopButton->setToolTip(on ? T("Web.Copy.Tip") : T("Web.Top.Publish.Tip"));
+}
+
+void Dock::refreshUpdate()
+{
+	if (!m_updater || !m_updateRow)
+		return;
+	const Updater *u = m_updater;
+	const QString version = u->latest().version;
+	const bool canRun = u->canInstall() && !u->latest().assetUrl.isEmpty();
+
+	// aviso de arriba
+	QString line, buttonText;
+	switch (u->state()) {
+	case Updater::State::Available:
+		line = T("Update.Top.Available").arg(version.toHtmlEscaped());
+		buttonText = canRun ? T("Update.Install") : T("Update.Download");
+		break;
+	case Updater::State::Installing:
+		line = T("Update.Top.Installing").arg(version.toHtmlEscaped());
+		break;
+	case Updater::State::Installed:
+		line = T("Update.Top.Installed").arg(u->installedVersion().toHtmlEscaped());
+		buttonText = T("Update.Notes");
+		break;
+	case Updater::State::Error:
+		if (!version.isEmpty()) { // fallo al instalar: se ofrece reintentar o bajarla a mano
+			line = T("Update.Top.Failed").arg(version.toHtmlEscaped(), u->message().toHtmlEscaped());
+			buttonText = canRun ? T("Update.Retry") : T("Update.Download");
+		}
+		break;
+	default:
+		break;
+	}
+	const QString color = u->state() == Updater::State::Installed ? QStringLiteral("#3fb950")
+			      : u->state() == Updater::State::Error   ? QStringLiteral("#f85149")
+								      : QStringLiteral("#58a6ff");
+	m_updateRow->setVisible(!line.isEmpty());
+	m_updateLabel->setText(QStringLiteral("<span style=\"color:%1\">\u25cf</span> %2").arg(color, line));
+	m_updateButton->setVisible(!buttonText.isEmpty());
+	m_updateButton->setText(buttonText);
+
+	// seccion de Ajustes
+	if (!m_updateStatus)
+		return;
+	QString status = T("Update.Current").arg(u->currentVersion());
+	switch (u->state()) {
+	case Updater::State::Checking:
+		status += QStringLiteral(" · ") + T("Update.Status.Checking");
+		break;
+	case Updater::State::UpToDate:
+		status += QStringLiteral(" · ") + T("Update.Status.UpToDate");
+		break;
+	case Updater::State::Available:
+		status += QStringLiteral(" · ") + T("Update.Status.Available").arg(version);
+		break;
+	case Updater::State::Installing:
+		status += QStringLiteral(" · ") + T("Update.Status.Installing").arg(version);
+		break;
+	case Updater::State::Installed:
+		status += QStringLiteral(" · ") + T("Update.Status.Installed").arg(u->installedVersion());
+		break;
+	case Updater::State::Error:
+		status += QStringLiteral(" · ") + u->message();
+		break;
+	case Updater::State::Idle:
+		break;
+	}
+	if (u->lastCheck().isValid())
+		status += QStringLiteral("\n") + T("Update.LastCheck").arg(QLocale().toString(u->lastCheck().time(), QLocale::ShortFormat));
+	if (!u->canInstall())
+		status += QStringLiteral("\n") + T("Update.ManualOnly");
+	if (!u->enabled())
+		status = T("Update.Current").arg(u->currentVersion());
+	m_updateStatus->setText(status);
+	m_updateCheck->setEnabled(u->enabled() && u->state() != Updater::State::Checking && u->state() != Updater::State::Installing);
 }
 
 void Dock::refreshChatStatus()

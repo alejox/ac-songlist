@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.22)
 
-project(ac-songlist VERSION 1.6.1 LANGUAGES CXX)
+project(ac-songlist VERSION 1.7.0 LANGUAGES CXX)
 if(APPLE)
   enable_language(OBJCXX)
 endif()
@@ -45,6 +45,7 @@ add_library(acsl-core STATIC
   src/net/https.hpp
   src/web/web-config.hpp
   src/web/publisher.hpp src/web/publisher.cpp
+  src/update/updater.hpp src/update/updater.cpp
   src/overlay/renderer.hpp src/overlay/renderer.cpp)
 target_link_libraries(acsl-core PUBLIC Qt6::Core Qt6::Gui Qt6::Network)
 

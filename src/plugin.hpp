@@ -5,6 +5,7 @@
 #include "core/bot.hpp"
 #include "core/store.hpp"
 #include "overlay/overlay-source.hpp"
+#include "update/updater.hpp"
 #include "web/publisher.hpp"
 
 #include <QObject>
@@ -30,6 +31,7 @@ public:
 	Store *store() { return &m_store; }
 	TwitchChat *chat() { return &m_chat; }
 	Publisher *publisher() { return m_publisher.get(); }
+	Updater *updater() { return m_updater.get(); }
 	QString dataPath() const { return m_path; }
 	void saveNow();
 
@@ -73,6 +75,7 @@ private:
 	TwitchChat m_chat;
 	std::unique_ptr<Bot> m_bot;
 	std::unique_ptr<Publisher> m_publisher;
+	std::unique_ptr<Updater> m_updater;
 	QString m_path;
 	QTimer m_saveTimer, m_animTimer, m_slowTimer;
 	std::vector<View> m_views;

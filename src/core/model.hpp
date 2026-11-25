@@ -79,6 +79,7 @@ struct Settings {
 	bool barList = true;
 	bool barNow = true;
 	bool barQueue = true;
+	bool autoUpdate = true; // instalar solo las versiones nuevas del plugin (se aplican al reiniciar OBS)
 };
 
 enum class ReqStatus {

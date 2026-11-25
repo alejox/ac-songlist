@@ -6,6 +6,13 @@
 #include "core/matcher.hpp"
 #include "core/store.hpp"
 #include "web/publisher.hpp"
+#include "update/updater.hpp"
+
+#include <QCryptographicHash>
+#include <QDir>
+#include <QDirIterator>
+#include <QFileInfo>
+#include <QProcess>
 
 #include <QCoreApplication>
 #include <QElapsedTimer>
@@ -508,6 +515,284 @@ static bool waitFor(const std::function<bool()> &condition, int ms = 4000)
 	return condition();
 }
 
+// ------------------------------------------------------------------ actualizaciones
+
+static bool writeFile(const QString &path, const QByteArray &data)
+{
+	QDir().mkpath(QFileInfo(path).absolutePath());
+	QFile f(path);
+	return f.open(QIODevice::WriteOnly) && f.write(data) == data.size();
+}
+
+static QByteArray readFile(const QString &path)
+{
+	QFile f(path);
+	return f.open(QIODevice::ReadOnly) ? f.readAll() : QByteArray("<no existe>");
+}
+
+static int countNamed(const QString &dir, const QString &part)
+{
+	int n = 0;
+	QDirIterator it(dir, QDir::Files | QDir::Hidden | QDir::NoDotAndDotDot, QDirIterator::Subdirectories);
+	while (it.hasNext()) {
+		it.next();
+		if (it.fileName().contains(part))
+			n++;
+	}
+	return n;
+}
+
+// Un plugin "instalado": binario, un idioma y un archivo que no viene en el paquete nuevo.
+static void fakeInstall(const QString &root)
+{
+	writeFile(root + "/" + Updater::binaryInPayload(), "binario viejo");
+	writeFile(root + "/data/locale/es-ES.ini", "textos viejos");
+	writeFile(root + "/sobra.txt", "solo en la version vieja");
+}
+
+static void fakePayload(const QString &payload)
+{
+	writeFile(payload + "/" + Updater::binaryInPayload(), "binario nuevo");
+	writeFile(payload + "/data/locale/es-ES.ini", "textos nuevos");
+	writeFile(payload + "/data/locale/en-US.ini", "idioma nuevo");
+}
+
+// Empaqueta con el mismo tar que usara el plugin (en Windows sale un .zip).
+static bool makePackage(const QString &dir, const QString &archive)
+{
+#ifdef _WIN32
+	const QString tar = QDir(qEnvironmentVariable("SystemRoot", "C:/Windows")).filePath("System32/tar.exe");
+#else
+	const QString tar = QFile::exists("/usr/bin/tar") ? QString("/usr/bin/tar") : QString("/bin/tar");
+#endif
+	QProcess p;
+	p.start(tar, {"-a", "-cf", QDir::toNativeSeparators(archive), "-C", QDir::toNativeSeparators(dir), "."});
+	return p.waitForFinished(60000) && p.exitStatus() == QProcess::NormalExit && p.exitCode() == 0;
+}
+
+static QByteArray releaseJson(const QString &tag, const QString &asset, const QString &url, const QByteArray &sha, qint64 size)
+{
+	QJsonObject a{{"name", asset}, {"browser_download_url", url}, {"size", double(size)}};
+	if (!sha.isEmpty())
+		a["digest"] = QString("sha256:" + sha);
+	const QJsonObject other{{"name", "otro-sistema.zip"}, {"browser_download_url", "https://x.invalid/otro"}, {"digest", "sha256:00"}};
+	return QJsonDocument(QJsonObject{{"tag_name", tag}, {"html_url", "https://github.invalid/v"}, {"assets", QJsonArray{other, a}}})
+		.toJson(QJsonDocument::Compact);
+}
+
+static void testUpdater()
+{
+	// versiones
+	CHECK(Updater::compareVersions("1.6.1", "1.6.0") > 0);
+	CHECK(Updater::compareVersions("v1.10.0", "1.9.9") > 0);
+	CHECK(Updater::compareVersions("1.6", "1.6.0") == 0);
+	CHECK(Updater::compareVersions("1.6.1", "v1.6.1") == 0);
+	CHECK(Updater::compareVersions("1.5.9", "1.6") < 0);
+	CHECK(Updater::compareVersions("2.0.0-beta", "1.9.0") > 0);
+
+	// donde esta instalado
+	const QString module = "/x/obs/plugins/" + Updater::payloadName() + "/" + Updater::binaryInPayload();
+	CHECK_EQ(Updater::rootForModule(module), QString("/x/obs/plugins/" + Updater::payloadName()));
+	CHECK(Updater::rootForModule("/usr/lib/obs-plugins/ac-songlist.so").isEmpty()); // instalado de otra forma
+	CHECK(Updater::rootForModule("").isEmpty());
+
+	// respuesta de GitHub
+	const QByteArray sha(64, 'a');
+	Updater::Release rel;
+	QString error;
+	CHECK(Updater::parseRelease(releaseJson("v9.1.0", Updater::assetName(), "https://x.invalid/p", sha, 123), Updater::assetName(), &rel,
+				    &error));
+	CHECK_EQ(rel.version, QString("9.1.0"));
+	CHECK_EQ(rel.assetUrl, QString("https://x.invalid/p"));
+	CHECK_EQ(rel.size, qint64(123));
+	CHECK_EQ(rel.sha256, sha);
+	CHECK_EQ(rel.pageUrl, QString("https://github.invalid/v"));
+	CHECK(!Updater::parseRelease(releaseJson("v9.1.0", "otro.zip", "u", sha, 1), Updater::assetName(), &rel, &error));
+	CHECK_EQ(rel.version, QString("9.1.0")); // sin paquete para este sistema igual se sabe la version
+	CHECK(!Updater::parseRelease(releaseJson("v9.1.0", Updater::assetName(), "u", QByteArray(), 1), Updater::assetName(), &rel, &error));
+	CHECK(!Updater::parseRelease("no es json", Updater::assetName(), &rel, &error));
+
+	// cambiar los archivos, de las dos formas
+	for (Updater::Swap swap : {Updater::Swap::PerFile, Updater::Swap::WholeFolder}) {
+		QTemporaryDir dir;
+		const QString root = dir.filePath("plugins/" + Updater::payloadName());
+		const QString payload = dir.filePath("nuevo/" + Updater::payloadName());
+		fakeInstall(root);
+		fakePayload(payload);
+		CHECK(Updater::apply(payload, root, swap, &error));
+		CHECK_EQ(readFile(root + "/" + Updater::binaryInPayload()), QByteArray("binario nuevo"));
+		CHECK_EQ(readFile(root + "/data/locale/es-ES.ini"), QByteArray("textos nuevos"));
+		CHECK_EQ(readFile(root + "/data/locale/en-US.ini"), QByteArray("idioma nuevo"));
+		if (swap == Updater::Swap::PerFile) {
+			CHECK(QFileInfo::exists(root + "/sobra.txt")); // archivo por archivo: lo que no viene se queda
+			CHECK_EQ(countNamed(root, ".acsl-old"), 2);
+		} else {
+			CHECK(!QFileInfo::exists(root + "/sobra.txt")); // carpeta entera: queda igual que el paquete
+			// lo viejo se aparta fuera de la carpeta de plugins
+			CHECK_EQ(readFile(dir.filePath("." + Updater::payloadName() + ".acsl-old/" + Updater::binaryInPayload())),
+				 QByteArray("binario viejo"));
+		}
+		CHECK_EQ(countNamed(root, ".acsl-new"), 0);
+		// en la carpeta de plugins no puede quedar otra copia: OBS la cargaria como un segundo plugin
+		CHECK_EQ(QDir(dir.filePath("plugins")).entryList(QDir::AllEntries | QDir::Hidden | QDir::NoDotAndDotDot),
+			 QStringList{Updater::payloadName()});
+		// una segunda actualizacion en la misma sesion (lo apartado antes sigue ahi)
+		writeFile(payload + "/" + Updater::binaryInPayload(), "binario mas nuevo");
+		CHECK(Updater::apply(payload, root, swap, &error));
+		CHECK_EQ(readFile(root + "/" + Updater::binaryInPayload()), QByteArray("binario mas nuevo"));
+		// al siguiente arranque se limpia
+		Updater::cleanup(root);
+		CHECK_EQ(countNamed(root, ".acsl-"), 0);
+		CHECK_EQ(countNamed(dir.path(), ".acsl-"), 0);
+		CHECK_EQ(readFile(root + "/" + Updater::binaryInPayload()), QByteArray("binario mas nuevo"));
+	}
+
+	// si no se puede escribir un archivo nuevo, no se toca nada
+	{
+		QTemporaryDir dir;
+		const QString root = dir.filePath("plugins/" + Updater::payloadName());
+		const QString payload = dir.filePath("nuevo/" + Updater::payloadName());
+		fakeInstall(root);
+		fakePayload(payload);
+		QDir().mkpath(root + "/data/locale/en-US.ini.acsl-new/bloqueo"); // estorba al escribir ese archivo
+		CHECK(!Updater::apply(payload, root, Updater::Swap::PerFile, &error));
+		CHECK_EQ(readFile(root + "/" + Updater::binaryInPayload()), QByteArray("binario viejo"));
+		CHECK_EQ(readFile(root + "/data/locale/es-ES.ini"), QByteArray("textos viejos"));
+		CHECK(!QFileInfo::exists(root + "/" + Updater::binaryInPayload() + ".acsl-new"));
+		CHECK_EQ(countNamed(root, ".acsl-old"), 0);
+	}
+
+	// todo el camino: descargar, comprobar la huella, descomprimir y cambiar
+	QTemporaryDir dir;
+	const QString pkgDir = dir.filePath("paquete");
+	fakePayload(pkgDir + "/" + Updater::payloadName());
+	writeFile(pkgDir + "/LEEME.txt", "instrucciones");
+	const QString archive = dir.filePath(Updater::assetName());
+	CHECK(makePackage(pkgDir, archive));
+	const QByteArray package = readFile(archive);
+	const QByteArray packageSha = QCryptographicHash::hash(package, QCryptographicHash::Sha256).toHex();
+	const QString root = dir.filePath("plugins/" + Updater::payloadName());
+	fakeInstall(root);
+
+	int apiCalls = 0, downloads = 0;
+	QByteArray served = package;
+	QString latestTag = "v9.1.0";
+	bool offline = false;
+	const auto getter = [&](const QUrl &url, qint64 maxBytes) {
+		HttpResult r;
+		if (offline) {
+			r.error = "sin red";
+			return r;
+		}
+		r.sent = true;
+		r.status = 200;
+		if (url.toString() == "https://api.invalid/latest") {
+			apiCalls++;
+			CHECK(maxBytes <= 1024 * 1024);
+			r.body = releaseJson(latestTag, Updater::assetName(), "https://dl.invalid/paquete", packageSha, package.size());
+		} else if (url.toString() == "https://dl.invalid/paquete") {
+			downloads++;
+			r.body = served;
+		} else {
+			r.status = 404;
+		}
+		return r;
+	};
+
+	// un paquete alterado no se instala
+	served = package;
+	served[served.size() / 2] = char(served[served.size() / 2] ^ 0x55);
+	Updater::Release good;
+	CHECK(Updater::parseRelease(releaseJson("v9.1.0", Updater::assetName(), "https://dl.invalid/paquete", packageSha, package.size()),
+				    Updater::assetName(), &good, &error));
+	CHECK(!Updater::downloadAndApply(good, root, getter, Updater::defaultSwap(), &error));
+	CHECK(error.contains("no coincide"));
+	CHECK_EQ(readFile(root + "/" + Updater::binaryInPayload()), QByteArray("binario viejo"));
+	served = package;
+
+	{
+		// automatico: encuentra la nueva y la instala sola
+		const int downloadsBefore = downloads;
+		Updater u("1.6.1");
+		u.setGetter(getter);
+		u.setApiUrl("https://api.invalid/latest");
+		u.setInstallRoot(root);
+		u.setAutoInstall(true);
+		u.check();
+		CHECK(waitFor([&]() { return u.state() == Updater::State::Installed || u.state() == Updater::State::Error; }, 30000));
+		CHECK(u.state() == Updater::State::Installed);
+		CHECK_EQ(u.message(), QString());
+		CHECK_EQ(u.installedVersion(), QString("9.1.0"));
+		CHECK_EQ(readFile(root + "/" + Updater::binaryInPayload()), QByteArray("binario nuevo"));
+		CHECK_EQ(readFile(root + "/data/locale/en-US.ini"), QByteArray("idioma nuevo"));
+		CHECK(!QFileInfo::exists(root + "/LEEME.txt")); // solo la carpeta del plugin
+		CHECK_EQ(downloads, downloadsBefore + 1);
+		// volver a buscar con la misma version publicada no reinstala
+		u.check();
+		CHECK(waitFor([&]() { return apiCalls == 2 && u.lastCheck().isValid(); }));
+		QThread::msleep(50);
+		QCoreApplication::processEvents();
+		CHECK(u.state() == Updater::State::Installed);
+		CHECK_EQ(downloads, downloadsBefore + 1);
+	}
+	{
+		// ya esta al dia
+		Updater u("9.1.0");
+		u.setGetter(getter);
+		u.setApiUrl("https://api.invalid/latest");
+		u.setInstallRoot(root);
+		u.check();
+		CHECK(waitFor([&]() { return u.state() == Updater::State::UpToDate; }));
+	}
+	{
+		// sin automatico: avisa y espera a que lo pidan
+		Updater u("1.0.0");
+		u.setGetter(getter);
+		u.setApiUrl("https://api.invalid/latest");
+		u.setInstallRoot(root);
+		u.setAutoInstall(false);
+		u.check();
+		CHECK(waitFor([&]() { return u.state() == Updater::State::Available; }));
+		CHECK_EQ(u.latest().version, QString("9.1.0"));
+		const int before = downloads;
+		u.install();
+		CHECK(waitFor([&]() { return u.state() == Updater::State::Installed; }, 30000));
+		CHECK_EQ(downloads, before + 1);
+	}
+	{
+		// instalado fuera de la carpeta de plugins: solo avisa
+		Updater u("1.0.0");
+		u.setGetter(getter);
+		u.setApiUrl("https://api.invalid/latest");
+		u.setAutoInstall(true);
+		u.check();
+		CHECK(waitFor([&]() { return u.state() == Updater::State::Available; }));
+		CHECK(!u.canInstall());
+	}
+	{
+		// sin conexion
+		offline = true;
+		Updater u("1.0.0");
+		u.setGetter(getter);
+		u.setApiUrl("https://api.invalid/latest");
+		u.check();
+		CHECK(waitFor([&]() { return u.state() == Updater::State::Error; }));
+		CHECK(!u.message().isEmpty());
+		offline = false;
+	}
+	{
+		// sin direccion: no hace nada
+		Updater u("1.0.0");
+		u.setGetter(getter);
+		CHECK(!u.enabled());
+		const int before = apiCalls;
+		u.check();
+		QCoreApplication::processEvents();
+		CHECK(u.state() == Updater::State::Idle);
+		CHECK_EQ(apiCalls, before);
+	}
+}
+
 // Publicacion del catalogo en la web, con un servicio simulado en lugar de la red.
 static void testPublisher()
 {
@@ -928,6 +1213,7 @@ int main(int argc, char **argv)
 	testBot();
 	testIrc();
 	testPublisher();
+	testUpdater();
 #ifndef _WIN32
 	testNativeLink();
 	testChatOverNativeLink();

@@ -26,7 +26,10 @@ QString lastError(const char *what)
 }
 } // namespace
 
-HttpResult httpPostJson(const QUrl &url, const HttpHeaders &headers, const QByteArray &body, int timeoutMs)
+namespace detail {
+
+HttpResult httpRequest(const char *method, const QUrl &url, const HttpHeaders &headers, const QByteArray &body, int timeoutMs,
+		       qint64 maxBytes)
 {
 	HttpResult result;
 	const bool secure = url.scheme().compare(QLatin1String("https"), Qt::CaseInsensitive) == 0;
@@ -51,19 +54,22 @@ HttpResult httpPostJson(const QUrl &url, const HttpHeaders &headers, const QByte
 		result.error = lastError("WinHttpConnect");
 		return result;
 	}
-	request.h = WinHttpOpenRequest(connection.h, L"POST", path.c_str(), nullptr, WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES,
+	const std::wstring verb = QString::fromLatin1(method).toStdWString();
+	request.h = WinHttpOpenRequest(connection.h, verb.c_str(), path.c_str(), nullptr, WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES,
 				       secure ? WINHTTP_FLAG_SECURE : 0);
 	if (!request.h) {
 		result.error = lastError("WinHttpOpenRequest");
 		return result;
 	}
 
-	QString headerText = QStringLiteral("Content-Type: application/json\r\n");
+	// WinHTTP sigue solo las redirecciones (salvo de https a http)
+	QString headerText;
 	for (const auto &h : headers)
 		headerText += QString::fromLatin1(h.first) + QStringLiteral(": ") + QString::fromLatin1(h.second) + QStringLiteral("\r\n");
 	const std::wstring headerW = headerText.toStdWString();
 
-	if (!WinHttpSendRequest(request.h, headerW.c_str(), DWORD(-1L), const_cast<char *>(body.constData()), DWORD(body.size()),
+	if (!WinHttpSendRequest(request.h, headerW.empty() ? WINHTTP_NO_ADDITIONAL_HEADERS : headerW.c_str(), DWORD(-1L),
+				body.isEmpty() ? WINHTTP_NO_REQUEST_DATA : const_cast<char *>(body.constData()), DWORD(body.size()),
 				DWORD(body.size()), 0)) {
 		result.error = lastError("WinHttpSendRequest");
 		return result;
@@ -88,11 +94,16 @@ HttpResult httpPostJson(const QUrl &url, const HttpHeaders &headers, const QByte
 		if (!WinHttpReadData(request.h, buffer, available < sizeof(buffer) ? available : DWORD(sizeof(buffer)), &read) || read == 0)
 			break;
 		result.body.append(buffer, int(read));
-		if (result.body.size() > 1024 * 1024)
+		if (result.body.size() > maxBytes) {
+			result.body.truncate(int(maxBytes));
+			result.error = QStringLiteral("respuesta demasiado grande");
 			break;
+		}
 	}
 	return result;
 }
+
+} // namespace detail
 
 bool httpsAvailable()
 {

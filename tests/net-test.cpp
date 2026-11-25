@@ -4,14 +4,26 @@
 #include "chat/chat-link.hpp"
 #include "chat/twitch-chat.hpp"
 #include "net/https.hpp"
+#include "update/updater.hpp"
 #include "web/publisher.hpp"
 #include "web/web-config.hpp"
 
 #include <QCoreApplication>
+#include <QDir>
+#include <QFile>
+#include <QFileInfo>
+#include <QTemporaryDir>
 #include <QElapsedTimer>
 #include <QRandomGenerator>
 #include <QTcpSocket>
 #include <QThread>
+
+#ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#endif
 
 #include <atomic>
 #include <chrono>
@@ -235,6 +247,55 @@ static void testPublishCycle()
 	report("borrar la lista de prueba", removed.sent && removed.body.contains("deleted"), removed.body.left(60).toStdString());
 }
 
+// Actualizaciones contra GitHub de verdad: pregunta la ultima version, descarga el paquete de
+// este sistema, comprueba su huella, lo descomprime y lo instala en una carpeta temporal.
+static void testRealUpdate()
+{
+	const Updater::Getter get = [](const QUrl &url, qint64 maxBytes) {
+		HttpHeaders headers{{"User-Agent", "ac-songlist/prueba"}};
+		if (maxBytes <= 1024 * 1024)
+			headers.append(qMakePair(QByteArrayLiteral("Accept"), QByteArrayLiteral("application/vnd.github+json")));
+		return httpGet(url, headers, maxBytes <= 1024 * 1024 ? 20000 : 180000, maxBytes);
+	};
+	const HttpResult api = get(QUrl(QStringLiteral(ACSL_UPDATE_API_URL)), 1024 * 1024);
+	Updater::Release release;
+	QString error;
+	const bool parsed = api.sent && api.status == 200 && Updater::parseRelease(api.body, Updater::assetName(), &release, &error);
+	report("GitHub dice cual es la ultima version", parsed,
+	       parsed ? (release.version + " · " + release.assetName).toStdString()
+		      : ("HTTP " + std::to_string(api.status) + " " + (error.isEmpty() ? api.error : error).toStdString()));
+	if (!parsed)
+		return;
+
+	QTemporaryDir dir;
+	const QString root = dir.filePath(QStringLiteral("plugins/") + Updater::payloadName());
+	QDir().mkpath(QFileInfo(root + QLatin1Char('/') + Updater::binaryInPayload()).absolutePath());
+	{
+		QFile f(root + QLatin1Char('/') + Updater::binaryInPayload());
+		f.open(QIODevice::WriteOnly);
+		f.write("version vieja");
+	}
+	const bool ok = Updater::downloadAndApply(release, root, get, Updater::defaultSwap(), &error);
+	const QFileInfo bin(root + QLatin1Char('/') + Updater::binaryInPayload());
+	report("descargar, comprobar e instalar la ultima version", ok && bin.size() > 10000,
+	       ok ? (std::to_string(bin.size()) + " bytes en " + Updater::binaryInPayload().toStdString()) : error.toStdString());
+	Updater::cleanup(root);
+
+#ifdef _WIN32
+	// En Windows todo depende de esto: un .dll cargado no se puede sobrescribir pero si renombrar.
+	const QString sys = QDir(qEnvironmentVariable("SystemRoot", QStringLiteral("C:/Windows"))).filePath(QStringLiteral("System32/version.dll"));
+	const QString copy = dir.filePath(QStringLiteral("prueba-cargada.dll"));
+	QFile::copy(sys, copy);
+	HMODULE module = LoadLibraryW(reinterpret_cast<const wchar_t *>(QDir::toNativeSeparators(copy).utf16()));
+	const bool renamed = module && QFile::rename(copy, copy + QStringLiteral(".acsl-old"));
+	const bool replaced = renamed && QFile::copy(sys, copy);
+	report("renombrar un .dll cargado y poner otro en su lugar", replaced,
+	       !module ? "no se pudo cargar la copia" : renamed ? (replaced ? "si" : "no se pudo escribir el nuevo") : "Windows no dejo renombrarlo");
+	if (module)
+		FreeLibrary(module);
+#endif
+}
+
 int main(int argc, char **argv)
 {
 	QCoreApplication app(argc, argv);
@@ -253,6 +314,7 @@ int main(int argc, char **argv)
 	std::printf("HTTPS disponible: %s\n", httpsAvailable() ? "si" : "no");
 	testHttps();
 	testPublishCycle();
+	testRealUpdate();
 
 	std::printf("%s\n", g_failed ? "RESULTADO: hay fallos" : "RESULTADO: todo correcto");
 	return g_failed ? 1 : 0;

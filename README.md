@@ -47,6 +47,18 @@ Requiere **OBS Studio 30.2 o superior** (64 bits).
 
 Después abre OBS y activa el panel en *Paneles → AC Songlist*.
 
+### Actualizaciones
+
+Solo hace falta instalarlo a mano la primera vez. Desde la **1.7.0** el plugin se actualiza solo:
+
+1. Unos segundos después de abrir OBS (y luego cada 6 horas) pregunta a GitHub cuál es la última versión publicada.
+2. Si hay una más nueva, descarga el paquete de tu sistema, comprueba su huella (sha256) contra la que publica GitHub y lo instala en la carpeta del plugin.
+3. Como OBS tiene el plugin abierto, la versión nueva se usa **la próxima vez que abras OBS**. El panel lo avisa: «Versión X instalada. Reinicia OBS para usarla».
+
+En *Ajustes → Actualizaciones* puedes desmarcar **Actualizar automáticamente**: entonces solo avisa y tú pulsas **Actualizar**. Si el plugin está instalado fuera de la carpeta de plugins de OBS, o Windows no le deja escribir en ella (por ejemplo, si `instalar.bat` se ejecutó como administrador), avisa de la versión nueva con un botón **Descargar**.
+
+Cómo cambia los archivos sin romper nada: en Windows un `.dll` en uso no se puede sobrescribir pero sí renombrar, así que cada archivo viejo se aparta con otro nombre y el nuevo ocupa su lugar. En macOS y Linux se cambia la carpeta entera de una vez y la vieja se aparta fuera de la carpeta de plugins, para que OBS no la cargue como un segundo plugin. Si algo falla a mitad, se deshace. Lo apartado se borra en el siguiente arranque.
+
 ## Uso
 
 **Guía completa paso a paso: [INSTRUCTIVO.md](INSTRUCTIVO.md)** · [en PDF](docs/AC-Songlist-Instructivo.pdf). Lo esencial:
@@ -132,6 +144,7 @@ En Windows y macOS lo compila [el flujo de GitHub Actions](.github/workflows/bui
 | `src/overlay/` | Dibujado del overlay y la fuente de vídeo de OBS. |
 | `src/ui/` | Panel acoplable. |
 | `src/net/`, `src/web/` | Cliente HTTPS por sistema operativo y publicación del catálogo en la web. |
+| `src/update/` | Actualizaciones automáticas desde las versiones publicadas en GitHub. |
 | `web/` | Página web pública y esquema de la base de datos. |
 | `tests/` | Pruebas del núcleo (con un servidor de chat simulado), prueba de conexión real con Twitch y generador de imágenes de muestra. |
 

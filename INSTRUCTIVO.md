@@ -158,7 +158,22 @@ La página tiene buscador y filtro por categoría, muestra la canción que suena
 - Para retirarla: **Ajustes → Página web pública** y desmarca **Publicar mi lista en la web**. Se borra de la web al momento.
 - La página queda ligada a este equipo por una clave que el plugin guarda con tus datos. Si cambias de ordenador, lleva también el archivo de datos (ver *Preguntas frecuentes*).
 
-## 8. Atajos de teclado
+## 8. Actualizaciones
+
+El plugin se actualiza solo. Cuando sale una versión nueva, la descarga y la instala, y en el panel aparece:
+
+> 🟢 Versión 1.8.0 instalada. Reinicia OBS para usarla.
+
+La próxima vez que abras OBS ya estará la nueva. No se pierde nada: tus canciones, la cola y los ajustes se guardan aparte.
+
+En **Ajustes → Actualizaciones** ves qué versión tienes y cuándo se buscó por última vez, y puedes:
+
+- Pulsar **Buscar ahora** para comprobarlo en el momento.
+- Desmarcar **Actualizar automáticamente**. Entonces el plugin solo avisa («Hay una versión nueva») y tú decides cuándo pulsar **Actualizar**.
+
+Si aparece un aviso en rojo («No se pudo instalar…»), pulsa **Descargar** e instálala a mano como la primera vez. Pasa, por ejemplo, si en Windows ejecutaste `instalar.bat` como administrador.
+
+## 9. Atajos de teclado
 
 En OBS: **Ajustes → Atajos**, busca «AC Songlist». Puedes asignar teclas a:
 
@@ -170,7 +185,7 @@ En OBS: **Ajustes → Atajos**, busca «AC Songlist». Puedes asignar teclas a:
 
 Útil para no soltar el instrumento: con un pedal o una tecla pasas a la siguiente.
 
-## 9. Historial
+## 10. Historial
 
 Pestaña **Historial**: qué tocaste, cuándo y quién lo pidió. La biblioteca guarda además cuántas veces tocaste cada canción (columna **Veces**) y la última fecha (pasa el ratón por encima).
 
