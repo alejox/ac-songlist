@@ -53,11 +53,18 @@ private:
 		QString lastRender;
 		int page = 0;
 		qint64 pageSince = 0;
+		// barra: cada panel aparece y desaparece por su cuenta
+		QString sectionIdentity[3];
+		double sectionOpacity[3] = {0, 0, 0};
+		OverlayCache cache; // capa quieta de la barra
 	};
 
 	void refresh();
 	bool updateView(View &view, qint64 now, double dtMs);
+	bool updateBar(View &view, qint64 now, double dtMs);
 	OverlayData buildData(View &view, qint64 now, QString *identity);
+	void setLabels(OverlayData &d) const;
+	void fillSongList(View &view, qint64 now, bool enabled, OverlayData &d, QString *identity);
 	void onChatMessage(const ChatUser &user, const QString &text);
 	void applyChatSettings();
 

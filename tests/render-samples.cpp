@@ -145,5 +145,75 @@ int main(int argc, char **argv)
 		songs.accentColor = accents[skin];
 		saveOnBackdrop(renderOverlay(songs, d), dir + QString("/1%1-%2-lista.png").arg(skin).arg(names[skin]));
 	}
+
+	// barra inferior: tres paneles de cristal sobre una escena con formas y luces
+	const auto saveOnScene = [](const QImage &overlay, const QString &path) {
+		QImage out(overlay.width(), overlay.height() + 360, QImage::Format_ARGB32_Premultiplied);
+		QPainter p(&out);
+		p.setRenderHint(QPainter::Antialiasing, true);
+		QLinearGradient g(0, 0, out.width(), out.height());
+		g.setColorAt(0, QColor(24, 30, 52));
+		g.setColorAt(0.45, QColor(120, 62, 88));
+		g.setColorAt(1, QColor(232, 150, 84));
+		p.fillRect(out.rect(), g);
+		p.setPen(Qt::NoPen);
+		const QColor blobs[] = {QColor(255, 214, 120, 150), QColor(70, 160, 220, 130), QColor(240, 240, 240, 110), QColor(30, 20, 40, 170),
+					QColor(250, 110, 90, 140)};
+		for (int i = 0; i < 14; i++) {
+			p.setBrush(blobs[i % 5]);
+			const double x = (i * 397) % out.width(), y = out.height() - 60 - (i * 131) % 330, r = 40 + (i * 53) % 150;
+			p.drawEllipse(QPointF(x, y), r, r * 0.8);
+		}
+		p.drawImage(0, 360, overlay);
+		p.end();
+		out.save(path);
+	};
+	OverlayStyle bar;
+	bar.mode = OverlayStyle::Bar;
+	bar.width = 1920;
+	bar.height = 200;
+	bar.columns = 2;
+	OverlayData barData = d;
+	const BarLayout bl = barLayout(bar);
+	while (barData.songs.size() > bl.listRows * bl.listColumns)
+		barData.songs.removeLast();
+	while (barData.queue.size() > bl.queueRows)
+		barData.queue.removeLast();
+	barData.pages = 12;
+	saveOnScene(renderOverlay(bar, barData, 1.0, 0.4), dir + "/20-barra.png");
+
+	OverlayData barLong = barData;
+	barLong.title = longData.title;
+	barLong.artist = longData.artist;
+	barLong.requesters = longData.requesters;
+	saveOnScene(renderOverlay(bar, barLong, 1.0, 1.1), dir + "/21-barra-titulo-largo.png");
+
+	OverlayData onlyNow = barData; // solo el panel central encendido
+	onlyNow.section[OverlayStyle::BarList] = 0;
+	onlyNow.section[OverlayStyle::BarQueue] = 0;
+	saveOnScene(renderOverlay(bar, onlyNow, 1.0, 2.0), dir + "/22-barra-solo-sonando.png");
+
+	OverlayData sides = barData; // nada sonando, cola vacia y pedidos cerrados
+	sides.hasPlaying = false;
+	sides.queue.clear();
+	sides.queueTotal = 0;
+	sides.requestsOpen = false;
+	saveOnScene(renderOverlay(bar, sides, 1.0, 0.0), dir + "/23-barra-sin-sonar.png");
+
+	OverlayStyle barLight = bar; // cristal claro, otro acento, 720p
+	barLight.width = 1280;
+	barLight.height = 140;
+	barLight.backgroundColor = QColor(255, 255, 255);
+	barLight.backgroundOpacity = 70;
+	barLight.textColor = QColor(18, 20, 28);
+	barLight.mutedColor = QColor(18, 20, 28, 165);
+	barLight.accentColor = QColor(225, 29, 72);
+	OverlayData lightData = d;
+	const BarLayout ll = barLayout(barLight);
+	while (lightData.songs.size() > ll.listRows * ll.listColumns)
+		lightData.songs.removeLast();
+	while (lightData.queue.size() > ll.queueRows)
+		lightData.queue.removeLast();
+	saveOnScene(renderOverlay(barLight, lightData, 1.0, 0.9), dir + "/24-barra-clara-720.png");
 	return 0;
 }

@@ -1,4 +1,4 @@
-// Dibuja el overlay (tarjeta "sonando ahora", cola o lista) en una imagen.
+// Dibuja el overlay (tarjeta "sonando ahora", cola, lista o la barra con las tres) en una imagen.
 // Solo QtGui: se puede probar sin OBS.
 #pragma once
 
@@ -11,7 +11,9 @@
 namespace acsl {
 
 struct OverlayStyle {
-	enum Mode { NowPlaying = 0, Queue = 1, SongList = 2 };
+	// Bar: una sola fuente con tres paneles de cristal (lista, sonando ahora y cola).
+	enum Mode { NowPlaying = 0, Queue = 1, SongList = 2, Bar = 3 };
+	enum BarSection { BarList = 0, BarNow = 1, BarQueue = 2 };
 	enum Align { Left = 0, Center = 1, Right = 2 };
 	enum VAlign { Top = 0, Middle = 1, Bottom = 2 };
 	// Aspecto. Los retro traen su propia paleta; de los colores elegidos solo usan el de acento.
@@ -19,7 +21,7 @@ struct OverlayStyle {
 
 	Mode mode = NowPlaying;
 	Skin skin = Minimal;
-	bool animate = true; // carretes, disco y ecualizador en movimiento (solo skins retro)
+	bool animate = true; // carretes, disco y ecualizador en movimiento (skins retro y barra)
 	int width = 900;
 	int height = 180;
 
@@ -50,6 +52,7 @@ struct OverlayStyle {
 
 	int rows = 6;    // filas de la cola / de la lista
 	int columns = 2; // columnas de la lista
+	int barCenterPercent = 34; // barra: ancho del panel central, en % del total
 };
 
 struct OverlayRow {
@@ -75,24 +78,55 @@ struct OverlayData {
 
 	bool requestsOpen = true;
 
+	// barra: opacidad de cada panel (lista, sonando, cola); 0 = apagado
+	double section[3] = {1.0, 1.0, 1.0};
+
 	// textos ya traducidos
 	QString lblNowPlaying, lblQueue, lblSongList, lblRequestedBy, lblHowTo, lblMore, lblClosed, lblEmptyQueue,
 		lblEmptyList;
 };
 
+// Lo que no cambia de un fotograma al siguiente (paneles y texto de la barra) se guarda aqui
+// para no volver a dibujarlo mientras solo gira el disco. Quien lo usa debe vaciarlo con
+// clear() cada vez que cambie el estilo; los cambios en los datos los detecta solo.
+struct OverlayCache {
+	QString key;
+	QImage base;
+	void clear()
+	{
+		key.clear();
+		base = QImage();
+	}
+};
+
 // Imagen RGBA premultiplicada del tamano style.width x style.height.
 // opacity (0..1) se usa para los fundidos; seconds es el reloj de las animaciones.
-QImage renderOverlay(const OverlayStyle &style, const OverlayData &data, double opacity = 1.0, double seconds = 0.0);
+QImage renderOverlay(const OverlayStyle &style, const OverlayData &data, double opacity = 1.0, double seconds = 0.0,
+		     OverlayCache *cache = nullptr);
 
 // true si ese estilo se mueve solo y hay que redibujarlo varias veces por segundo.
 inline bool isAnimated(const OverlayStyle &s)
 {
+	if (s.mode == OverlayStyle::Bar)
+		return s.animate; // el disco del panel central
 	return s.animate && s.skin != OverlayStyle::Minimal && s.mode == OverlayStyle::NowPlaying;
 }
 
-// Canciones por pagina en el modo lista.
+// Barra: cuantas filas caben en cada panel con ese tamano y esa letra.
+struct BarLayout {
+	int listRows = 1;
+	int listColumns = 1;
+	int queueRows = 1;
+};
+BarLayout barLayout(const OverlayStyle &style);
+
+// Canciones por pagina en el modo lista (y en el panel de lista de la barra).
 inline int songsPerPage(const OverlayStyle &s)
 {
+	if (s.mode == OverlayStyle::Bar) {
+		const BarLayout b = barLayout(s);
+		return b.listRows * b.listColumns;
+	}
 	return qMax(1, s.rows) * qMax(1, s.columns);
 }
 

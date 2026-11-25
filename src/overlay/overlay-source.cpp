@@ -12,7 +12,8 @@ struct Defaults {
 	int width, height, fontSize;
 };
 // tamano inicial comodo para cada modo
-const Defaults kDefaults[] = {{900, 180, 40}, {640, 460, 36}, {1500, 560, 36}};
+const Defaults kDefaults[] = {{900, 180, 40}, {640, 460, 36}, {1500, 560, 36}, {1920, 200, 40}};
+const int kModes = 4;
 
 struct OverlaySource {
 	obs_source_t *source = nullptr;
@@ -39,7 +40,7 @@ const char *kDefaultFont = "Sans Serif";
 void readSettings(OverlaySource *ctx, obs_data_t *settings)
 {
 	OverlayStyle s;
-	s.mode = OverlayStyle::Mode(qBound(0, int(obs_data_get_int(settings, "mode")), 2));
+	s.mode = OverlayStyle::Mode(qBound(0, int(obs_data_get_int(settings, "mode")), kModes - 1));
 	s.skin = OverlayStyle::Skin(qBound(0, int(obs_data_get_int(settings, "skin")), 3));
 	s.animate = obs_data_get_bool(settings, "animate");
 	s.showHowTo = obs_data_get_bool(settings, "show_howto");
@@ -78,6 +79,7 @@ void readSettings(OverlaySource *ctx, obs_data_t *settings)
 	s.idleText = QString::fromUtf8(obs_data_get_string(settings, "idle_text"));
 	s.rows = qBound(1, int(obs_data_get_int(settings, "rows")), 40);
 	s.columns = qBound(1, int(obs_data_get_int(settings, "columns")), 6);
+	s.barCenterPercent = qBound(20, int(obs_data_get_int(settings, "bar_center")), 60);
 
 	ctx->width = uint32_t(s.width);
 	ctx->height = uint32_t(s.height);
@@ -196,32 +198,39 @@ void setVisible(obs_properties_t *props, const char *name, bool visible)
 
 bool modeChanged(obs_properties_t *props, obs_property_t *, obs_data_t *settings)
 {
-	const int mode = qBound(0, int(obs_data_get_int(settings, "mode")), 2);
+	const int mode = qBound(0, int(obs_data_get_int(settings, "mode")), kModes - 1);
 	const bool np = mode == OverlayStyle::NowPlaying;
 	const bool queue = mode == OverlayStyle::Queue;
 	const bool list = mode == OverlayStyle::SongList;
+	const bool bar = mode == OverlayStyle::Bar; // los tres a la vez, siempre en cristal
 	// Los skins retro traen su paleta: solo usan el color de acento.
-	const bool minimal = obs_data_get_int(settings, "skin") == OverlayStyle::Minimal;
+	const bool minimal = bar || obs_data_get_int(settings, "skin") == OverlayStyle::Minimal;
+	setVisible(props, "skin", !bar);
 	setVisible(props, "text_color", minimal);
 	setVisible(props, "bg_color", minimal);
 	setVisible(props, "bg_opacity", minimal);
 	setVisible(props, "radius", minimal);
 	setVisible(props, "padding", minimal || !np);
-	setVisible(props, "animate", !minimal && np);
-	setVisible(props, "show_howto", queue || list);
+	setVisible(props, "animate", bar || (!minimal && np));
+	setVisible(props, "show_howto", queue || list || bar);
 	setVisible(props, "accent_bar", np && minimal);
-	setVisible(props, "idle_text", np);
-	setVisible(props, "show_requester", np || queue);
-	setVisible(props, "show_numbers", queue || list);
+	setVisible(props, "idle_text", np || bar);
+	setVisible(props, "show_requester", np || queue || bar);
+	setVisible(props, "show_numbers", queue || list || bar);
 	setVisible(props, "hide_empty", queue);
-	setVisible(props, "rows", queue || list);
-	setVisible(props, "columns", list);
-	setVisible(props, "list_on_demand", list);
-	setVisible(props, "page_seconds", list);
+	setVisible(props, "rows", queue || list); // en la barra las filas salen del alto
+	setVisible(props, "columns", list || bar);
+	setVisible(props, "list_on_demand", list || bar);
+	setVisible(props, "page_seconds", list || bar);
+	setVisible(props, "align", !bar);
+	setVisible(props, "valign", !bar);
+	setVisible(props, "label", !bar);
+	setVisible(props, "bar_center", bar);
+	setVisible(props, "bar_hint", bar);
 
 	// Si el tamano sigue siendo el inicial de otro modo, usa el de este.
 	const int w = int(obs_data_get_int(settings, "width")), h = int(obs_data_get_int(settings, "height"));
-	for (int i = 0; i < 3; i++) {
+	for (int i = 0; i < kModes; i++) {
 		if (i != mode && w == kDefaults[i].width && h == kDefaults[i].height) {
 			obs_data_set_int(settings, "width", kDefaults[mode].width);
 			obs_data_set_int(settings, "height", kDefaults[mode].height);
@@ -240,7 +249,9 @@ obs_properties_t *sourceProperties(void *)
 	obs_property_list_add_int(mode, obs_module_text("Source.Mode.NowPlaying"), OverlayStyle::NowPlaying);
 	obs_property_list_add_int(mode, obs_module_text("Source.Mode.Queue"), OverlayStyle::Queue);
 	obs_property_list_add_int(mode, obs_module_text("Source.Mode.SongList"), OverlayStyle::SongList);
+	obs_property_list_add_int(mode, obs_module_text("Source.Mode.Bar"), OverlayStyle::Bar);
 	obs_property_set_modified_callback(mode, modeChanged);
+	obs_properties_add_text(props, "bar_hint", obs_module_text("Source.BarHint"), OBS_TEXT_INFO);
 
 	obs_property_t *skin = obs_properties_add_list(props, "skin", obs_module_text("Source.Skin"), OBS_COMBO_TYPE_LIST,
 						       OBS_COMBO_FORMAT_INT);
@@ -253,6 +264,7 @@ obs_properties_t *sourceProperties(void *)
 
 	obs_properties_add_int(props, "width", obs_module_text("Source.Width"), 64, 4096, 10);
 	obs_properties_add_int(props, "height", obs_module_text("Source.Height"), 32, 4096, 10);
+	obs_properties_add_int_slider(props, "bar_center", obs_module_text("Source.BarCenter"), 20, 60, 1);
 
 	obs_properties_add_font(props, "font", obs_module_text("Source.Font"));
 	obs_properties_add_color(props, "text_color", obs_module_text("Source.TextColor"));
@@ -325,6 +337,7 @@ void sourceDefaults(obs_data_t *settings)
 	obs_data_set_default_int(settings, "columns", 3);
 	obs_data_set_default_bool(settings, "list_on_demand", false);
 	obs_data_set_default_int(settings, "page_seconds", 8);
+	obs_data_set_default_int(settings, "bar_center", 34);
 }
 
 } // namespace

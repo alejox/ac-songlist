@@ -195,10 +195,8 @@ static QString joinRow(const OverlayRow &r)
 	       QChar(0x1e);
 }
 
-OverlayData Plugin::buildData(View &view, qint64 now, QString *identity)
+void Plugin::setLabels(OverlayData &d) const
 {
-	const OverlayStyle &s = view.style;
-	OverlayData d;
 	d.requestsOpen = m_store.settings().requestsOpen;
 	d.lblNowPlaying = T("Overlay.NowPlaying");
 	d.lblQueue = T("Overlay.Queue");
@@ -209,6 +207,56 @@ OverlayData Plugin::buildData(View &view, qint64 now, QString *identity)
 	d.lblClosed = T("Overlay.Closed");
 	d.lblEmptyQueue = T("Overlay.EmptyQueue");
 	d.lblEmptyList = T("Overlay.EmptyList");
+}
+
+// Lista de canciones, por paginas. identity queda vacio si no hay que mostrarla.
+void Plugin::fillSongList(View &view, qint64 now, bool enabled, OverlayData &d, QString *identity)
+{
+	const OverlayStyle &s = view.style;
+	QList<const Song *> active;
+	for (const Song &song : m_store.songs())
+		if (song.active)
+			active.append(&song);
+	std::sort(active.begin(), active.end(), [](const Song *a, const Song *b) { return a->id < b->id; });
+
+	const int perPage = songsPerPage(s);
+	d.songsTotal = int(active.size());
+	d.pages = qMax(1, (d.songsTotal + perPage - 1) / perPage);
+
+	bool visible = enabled && !(active.isEmpty() && s.hideWhenEmpty);
+	if (view.listOnDemand) {
+		// se muestra al menos una vuelta completa de paginas
+		const qint64 fullTurn = qint64(d.pages) * view.pageSeconds * 1000;
+		if (m_listRestart) {
+			view.page = 0;
+			view.pageSince = now;
+			m_listUntil = qMax(m_listUntil, now + fullTurn);
+		}
+		visible = visible && now < m_listUntil;
+	}
+	if (!visible) {
+		*identity = QString();
+		return;
+	}
+	if (view.pageSince == 0)
+		view.pageSince = now;
+	if (d.pages > 1 && now - view.pageSince >= qint64(view.pageSeconds) * 1000) {
+		view.page++;
+		view.pageSince = now;
+	}
+	if (view.page >= d.pages)
+		view.page = 0;
+	d.page = view.page;
+	for (int i = d.page * perPage; i < active.size() && i < (d.page + 1) * perPage; i++)
+		d.songs.append({active[i]->id, active[i]->title, active[i]->artist, QString()});
+	*identity = QStringLiteral("list") + QString::number(d.page);
+}
+
+OverlayData Plugin::buildData(View &view, qint64 now, QString *identity)
+{
+	const OverlayStyle &s = view.style;
+	OverlayData d;
+	setLabels(d);
 
 	const QueueItem &playing = m_store.playing();
 	if (s.mode == OverlayStyle::NowPlaying) {
@@ -234,45 +282,128 @@ OverlayData Plugin::buildData(View &view, qint64 now, QString *identity)
 		return d;
 	}
 
-	// lista de canciones, por paginas
-	QList<const Song *> active;
-	for (const Song &song : m_store.songs())
-		if (song.active)
-			active.append(&song);
-	std::sort(active.begin(), active.end(), [](const Song *a, const Song *b) { return a->id < b->id; });
-
-	const int perPage = songsPerPage(s);
-	d.songsTotal = int(active.size());
-	d.pages = qMax(1, (d.songsTotal + perPage - 1) / perPage);
-
-	bool visible = !(active.isEmpty() && s.hideWhenEmpty);
-	if (view.listOnDemand) {
-		// se muestra al menos una vuelta completa de paginas
-		const qint64 fullTurn = qint64(d.pages) * view.pageSeconds * 1000;
-		if (m_listRestart) {
-			view.page = 0;
-			view.pageSince = now;
-			m_listUntil = qMax(m_listUntil, now + fullTurn);
-		}
-		visible = visible && now < m_listUntil;
-	}
-	if (!visible) {
-		*identity = QString();
-		return d;
-	}
-	if (view.pageSince == 0)
-		view.pageSince = now;
-	if (d.pages > 1 && now - view.pageSince >= qint64(view.pageSeconds) * 1000) {
-		view.page++;
-		view.pageSince = now;
-	}
-	if (view.page >= d.pages)
-		view.page = 0;
-	d.page = view.page;
-	for (int i = d.page * perPage; i < active.size() && i < (d.page + 1) * perPage; i++)
-		d.songs.append({active[i]->id, active[i]->title, active[i]->artist, QString()});
-	*identity = QStringLiteral("list") + QString::number(d.page);
+	fillSongList(view, now, true, d, identity);
 	return d;
+}
+
+// Barra: los tres paneles comparten fuente pero cada uno tiene su propio fundido, para que
+// encender o apagar uno (o cambiar de cancion) no haga parpadear a los otros dos.
+bool Plugin::updateBar(View &view, qint64 now, double dtMs)
+{
+	const OverlayStyle &s = view.style;
+	const Settings &cfg = m_store.settings();
+	OverlayData target;
+	QString ids[3];
+
+	fillSongList(view, now, cfg.barList, target, &ids[OverlayStyle::BarList]);
+
+	const QueueItem &playing = m_store.playing();
+	target.hasPlaying = playing.valid();
+	if (target.hasPlaying) {
+		target.title = playing.title;
+		target.artist = playing.artist;
+		target.requesters = playing.requesters();
+	}
+	if (cfg.barNow) {
+		if (target.hasPlaying)
+			ids[OverlayStyle::BarNow] = QStringLiteral("np") + QChar(0x1f) + QString::number(playing.id) + QChar(0x1f) +
+						    target.title + QChar(0x1f) + target.artist;
+		else if (!s.idleText.trimmed().isEmpty())
+			ids[OverlayStyle::BarNow] = QStringLiteral("idle");
+	}
+
+	const QList<QueueItem> &queue = m_store.queue();
+	const int queueRows = barLayout(s).queueRows;
+	target.queueTotal = int(queue.size());
+	for (int i = 0; i < queue.size() && i < queueRows; i++)
+		target.queue.append({i + 1, queue[i].title, queue[i].artist, queue[i].requesters().join(QStringLiteral(", "))});
+	if (cfg.barQueue)
+		ids[OverlayStyle::BarQueue] = QStringLiteral("queue");
+
+	// lo que cada panel tiene en pantalla solo cambia cuando ese panel ya se desvanecio
+	const auto take = [&](int section) {
+		OverlayData &d = view.data;
+		if (section == OverlayStyle::BarList) {
+			d.songs = target.songs;
+			d.page = target.page;
+			d.pages = target.pages;
+			d.songsTotal = target.songsTotal;
+		} else if (section == OverlayStyle::BarNow) {
+			d.hasPlaying = target.hasPlaying;
+			d.title = target.title;
+			d.artist = target.artist;
+			d.requesters = target.requesters;
+		} else {
+			d.queue = target.queue;
+			d.queueTotal = target.queueTotal;
+		}
+	};
+
+	bool animating = false;
+	bool anyVisible = false;
+	for (int i = 0; i < 3; i++) {
+		QString &identity = view.sectionIdentity[i];
+		double &opacity = view.sectionOpacity[i];
+		if (ids[i] != identity) {
+			if (opacity > 0 && !identity.isEmpty()) {
+				opacity = qMax(0.0, opacity - dtMs / kFadeOutMs);
+				animating = true;
+			}
+			if (opacity <= 0 || identity.isEmpty()) {
+				opacity = 0;
+				take(i);
+				identity = ids[i];
+				animating = animating || !identity.isEmpty();
+			}
+		} else {
+			take(i);
+			if (identity.isEmpty()) {
+				opacity = 0;
+			} else if (opacity < 1) {
+				opacity = qMin(1.0, opacity + dtMs / kFadeInMs);
+				animating = animating || opacity < 1;
+			}
+		}
+		anyVisible = anyVisible || !identity.isEmpty();
+	}
+	setLabels(view.data);
+	view.identity = anyVisible ? QStringLiteral("bar") : QString();
+	view.opacity = anyVisible ? 1.0 : 0.0;
+
+	// el disco gira mientras el panel central esta en pantalla con una cancion sonando
+	const bool moving = s.animate && view.data.hasPlaying && !view.sectionIdentity[OverlayStyle::BarNow].isEmpty();
+	if (moving)
+		animating = true;
+	const qint64 frame = moving ? now / 66 : 0;
+
+	const OverlayData &d = view.data;
+	QString sig = QStringLiteral("bar") + QString::number(view.styleVersion) + QChar(0x1d) + QString::number(frame) + QChar(0x1d) +
+		      d.title + QChar(0x1f) + d.artist + QChar(0x1f) + d.requesters.join(QLatin1Char(',')) + QChar(0x1f) +
+		      (d.hasPlaying ? QLatin1Char('1') : QLatin1Char('0')) + QChar(0x1d) + QString::number(d.queueTotal) + QChar(0x1f) +
+		      QString::number(d.songsTotal) + QChar(0x1f) + QString::number(d.page) + QChar(0x1f) + QString::number(d.pages) +
+		      QChar(0x1f) + (d.requestsOpen ? QLatin1Char('1') : QLatin1Char('0')) + QChar(0x1d);
+	for (int i = 0; i < 3; i++)
+		sig += view.sectionIdentity[i] + QChar(0x1f) + QString::number(int(view.sectionOpacity[i] * 255)) + QChar(0x1d);
+	for (const OverlayRow &r : d.queue)
+		sig += joinRow(r);
+	for (const OverlayRow &r : d.songs)
+		sig += joinRow(r);
+	if (sig == view.lastRender)
+		return animating;
+	view.lastRender = sig;
+
+	for (int i = 0; i < 3; i++) { // ease-out, como en el resto de los modos
+		const double o = view.sectionOpacity[i];
+		view.data.section[i] = view.sectionIdentity[i].isEmpty() ? 0.0 : 1.0 - (1.0 - o) * (1.0 - o);
+	}
+	const double seconds = double(now - m_startedAt) / 1000.0;
+	QImage image = renderOverlay(s, view.data, anyVisible ? 1.0 : 0.0, seconds, &view.cache);
+	{
+		std::lock_guard<std::mutex> lock(view.shared->mutex);
+		view.shared->image = std::move(image);
+		view.shared->imageDirty = true;
+	}
+	return animating;
 }
 
 // Devuelve true mientras haya un fundido en marcha.
@@ -285,8 +416,11 @@ bool Plugin::updateView(View &view, qint64 now, double dtMs)
 			view.style = view.shared->style;
 			view.listOnDemand = view.shared->listOnDemand;
 			view.pageSeconds = view.shared->pageSeconds;
+			view.cache.clear(); // otro estilo: lo guardado ya no vale
 		}
 	}
+	if (view.style.mode == OverlayStyle::Bar)
+		return updateBar(view, now, dtMs);
 
 	QString targetIdentity;
 	const OverlayData target = buildData(view, now, &targetIdentity);

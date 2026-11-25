@@ -38,6 +38,12 @@ Hotkey g_hotkeys[] = {
 	{"ac_songlist.toggle_requests", "Hotkey.ToggleRequests",
 	 [](Plugin *p) { p->store()->setRequestsOpen(!p->store()->settings().requestsOpen); }, OBS_INVALID_HOTKEY_ID},
 	{"ac_songlist.show_list", "Hotkey.ShowList", [](Plugin *p) { p->store()->showList(); }, OBS_INVALID_HOTKEY_ID},
+	{"ac_songlist.bar_list", "Hotkey.BarList", [](Plugin *p) { p->store()->setBarSection(0, !p->store()->barSection(0)); },
+	 OBS_INVALID_HOTKEY_ID},
+	{"ac_songlist.bar_now", "Hotkey.BarNow", [](Plugin *p) { p->store()->setBarSection(1, !p->store()->barSection(1)); },
+	 OBS_INVALID_HOTKEY_ID},
+	{"ac_songlist.bar_queue", "Hotkey.BarQueue", [](Plugin *p) { p->store()->setBarSection(2, !p->store()->barSection(2)); },
+	 OBS_INVALID_HOTKEY_ID},
 };
 
 bool g_dockAdded = false;

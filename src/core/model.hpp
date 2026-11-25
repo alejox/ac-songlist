@@ -75,6 +75,10 @@ struct Settings {
 	QString botToken;
 	bool webEnabled = false; // publicar la lista en la pagina web publica
 	QString webKey;          // clave secreta de este equipo para publicar (se genera sola)
+	// barra en pantalla: que paneles estan encendidos (lista, sonando ahora, cola)
+	bool barList = true;
+	bool barNow = true;
+	bool barQueue = true;
 };
 
 enum class ReqStatus {

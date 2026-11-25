@@ -16,20 +16,24 @@ Plugin nativo de OBS (C++/Qt) para streamers que tocan en directo. Sin servicios
   - **Cola**: pedidos pendientes, quién los hizo, reordenar, quitar, *Tocar ahora*.
   - **Canciones**: alta rápida (título, Enter, artista, Enter), buscador sin acentos ni mayúsculas, categorías, editar, desactivar, importar y exportar CSV.
   - **Historial**: qué se tocó, cuándo y para quién.
-  - **Ajustes**: canal de Twitch, límites de pedidos y respuestas en el chat.
-- **Fuente de vídeo «AC Songlist»** para tus escenas, con tres modos:
+  - **Ajustes**: canal de Twitch, límites de pedidos y página web pública.
+- **Fuente de vídeo «AC Songlist»** para tus escenas, con cuatro modos:
   - *Sonando ahora*: la tarjeta de la canción actual, con fundido al cambiar.
   - *Cola de pedidos*: los siguientes pedidos y quién los pidió.
   - *Lista de canciones*: la biblioteca numerada, por páginas. Puede estar siempre visible o aparecer solo cuando alguien escribe `!lista`.
+  - *Barra inferior*: los tres anteriores juntos en una sola fuente (ver más abajo).
 - **Skins retro** además del minimalista: casete (con carretes que giran), equipo de sonido (display de puntos con ecualizador y marquesina) y vinilo (disco girando). Sirven para la tarjeta, la cola y la lista.
 - **Estilo neutro y configurable** desde las propiedades de la fuente: tipografía, tamaño, colores de texto, acento y fondo, opacidad (0 = sin fondo), esquinas, márgenes, alineación, encabezado, filas y columnas.
+- **Barra inferior**: una sola fuente con tres paneles de cristal — lista de canciones, «Sonando ahora» con un disco que gira y cola de pedidos — que enciendes y apagas con tres casillas del panel, sin crear más fuentes.
 - **Página web pública** (opcional): tu lista en una página que puedes compartir, con buscador y filtro por categoría, que se actualiza sola cuando agregas canciones y muestra lo que suena y la cola.
 - **Chat de Twitch** sin iniciar sesión ni tokens: solo escribes el nombre de tu canal. La conexión va cifrada y es de solo lectura.
-- **Atajos de teclado** en *Ajustes → Atajos*: siguiente canción, terminar la actual, abrir/cerrar pedidos, mostrar la lista.
+- **Atajos de teclado** en *Ajustes → Atajos*: siguiente canción, terminar la actual, abrir/cerrar pedidos, mostrar la lista y encender/apagar cada panel de la barra.
 
 ![Cola y lista](docs/cola-y-lista.png)
 
 ![Skins retro](docs/skins.png)
+
+![Barra inferior](docs/barra.png)
 
 ## Instalación
 

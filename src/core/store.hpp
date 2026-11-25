@@ -52,6 +52,9 @@ public:
 
 	void setSettings(const Settings &settings);
 	void setRequestsOpen(bool open);
+	// Enciende o apaga un panel de la barra: 0 = lista, 1 = sonando ahora, 2 = cola.
+	void setBarSection(int section, bool on);
+	bool barSection(int section) const;
 	void showList(); // alguien pidio ver la lista en pantalla
 
 	// --- persistencia

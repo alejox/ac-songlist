@@ -58,6 +58,7 @@ private:
 
 	QLabel *m_chatStatus;
 	QPushButton *m_requestsToggle;
+	QCheckBox *m_barSection[3] = {nullptr, nullptr, nullptr}; // paneles de la barra: lista, sonando, cola
 	QLabel *m_npTitle, *m_npSub;
 	QPushButton *m_btnNext, *m_btnFinish, *m_btnSkip;
 	QTabWidget *m_tabs;

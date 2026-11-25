@@ -489,6 +489,19 @@ void Store::setRequestsOpen(bool open)
 	emit changed();
 }
 
+bool Store::barSection(int section) const
+{
+	return section == 0 ? m_settings.barList : section == 1 ? m_settings.barNow : section == 2 ? m_settings.barQueue : false;
+}
+
+void Store::setBarSection(int section, bool on)
+{
+	if (section < 0 || section > 2 || barSection(section) == on)
+		return;
+	(section == 0 ? m_settings.barList : section == 1 ? m_settings.barNow : m_settings.barQueue) = on;
+	emit changed(); // se guarda y se redibuja; no toca el chat ni la pagina web
+}
+
 void Store::showList()
 {
 	emit listRequested();
@@ -561,7 +574,8 @@ QJsonObject Store::toJson() const
 				   {"replies", c.replies},           {"listSeconds", c.listSeconds},
 				   {"channel", c.channel},           {"botUser", c.botUser},
 				   {"botToken", c.botToken},         {"webEnabled", c.webEnabled},
-				   {"webKey", c.webKey}};
+				   {"webKey", c.webKey},             {"barList", c.barList},
+				   {"barNow", c.barNow},             {"barQueue", c.barQueue}};
 	QJsonObject root{{"version", 1},        {"songs", songs},
 			 {"queue", queue},      {"history", history},
 			 {"settings", settings}, {"nextSongId", m_nextSongId},
@@ -634,6 +648,9 @@ void Store::fromJson(const QJsonObject &root)
 	s.botToken = c.value("botToken").toString();
 	s.webEnabled = c.value("webEnabled").toBool(false);
 	s.webKey = c.value("webKey").toString();
+	s.barList = c.value("barList").toBool(true);
+	s.barNow = c.value("barNow").toBool(true);
+	s.barQueue = c.value("barQueue").toBool(true);
 	m_settings = s;
 
 	m_nextSongId = qMax(root.value("nextSongId").toInt(1), maxSong + 1);

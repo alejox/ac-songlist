@@ -257,6 +257,52 @@ static void testPersistence()
 	CHECK(!s.load(dir.filePath("no-existe.json")));
 }
 
+// Paneles de la barra: se encienden y apagan sueltos, se guardan y no tocan el chat.
+static void testBarSections()
+{
+	QTemporaryDir dir;
+	const QString path = dir.filePath("songlist.json");
+	{
+		Store s;
+		CHECK(s.barSection(0) && s.barSection(1) && s.barSection(2)); // de fabrica, los tres encendidos
+		int changes = 0, settingsChanges = 0;
+		QObject::connect(&s, &Store::changed, [&]() { changes++; });
+		QObject::connect(&s, &Store::settingsChanged, [&]() { settingsChanges++; });
+		s.setBarSection(1, false);
+		CHECK(s.barSection(0) && !s.barSection(1) && s.barSection(2));
+		CHECK_EQ(changes, 1);
+		s.setBarSection(1, false); // repetir no cambia nada
+		CHECK_EQ(changes, 1);
+		s.setBarSection(2, false);
+		s.setBarSection(0, false);
+		s.setBarSection(0, true);
+		CHECK_EQ(changes, 4);
+		CHECK_EQ(settingsChanges, 0); // no reconecta el chat ni republica la web
+		s.setBarSection(7, true); // fuera de rango: se ignora
+		s.setBarSection(-1, false);
+		CHECK(!s.barSection(7));
+		CHECK_EQ(changes, 4);
+		// guardar los ajustes generales no pisa las casillas
+		Settings c = s.settings();
+		c.channel = "micanal";
+		s.setSettings(c);
+		CHECK(s.barSection(0) && !s.barSection(1) && !s.barSection(2));
+		CHECK(s.save(path));
+	}
+	Store s;
+	CHECK(s.load(path));
+	CHECK(s.barSection(0) && !s.barSection(1) && !s.barSection(2));
+
+	// un archivo de una version anterior (sin esas claves) arranca con los tres paneles
+	QFile old(dir.filePath("viejo.json"));
+	CHECK(old.open(QIODevice::WriteOnly));
+	old.write("{\"version\":1,\"songs\":[],\"queue\":[],\"history\":[],\"settings\":{\"channel\":\"x\"}}");
+	old.close();
+	Store o;
+	CHECK(o.load(old.fileName()));
+	CHECK(o.barSection(0) && o.barSection(1) && o.barSection(2));
+}
+
 static void testNumbering()
 {
 	Store s;
@@ -868,6 +914,7 @@ int main(int argc, char **argv)
 	testQueueFlow();
 	testPersistence();
 	testNumbering();
+	testBarSections();
 	testCsv();
 	testBot();
 	testIrc();

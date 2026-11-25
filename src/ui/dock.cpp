@@ -169,6 +169,23 @@ Dock::Dock(Store *store, TwitchChat *chat, Publisher *publisher, QWidget *parent
 	npLayout->addWidget(m_npSub);
 	npLayout->addLayout(npButtons);
 
+	// --- barra en pantalla: una casilla por panel, en el mismo orden en que se ven
+	auto *barRow = new QHBoxLayout;
+	auto *barLabel = new QLabel(T("Dock.Bar"), this);
+	barLabel->setToolTip(T("Dock.Bar.Tip"));
+	barRow->addWidget(barLabel);
+	const char *barKeys[3] = {"Dock.Bar.List", "Dock.Bar.Now", "Dock.Bar.Queue"};
+	for (int i = 0; i < 3; i++) {
+		m_barSection[i] = new QCheckBox(T(barKeys[i]), this);
+		m_barSection[i]->setToolTip(T("Dock.Bar.Tip"));
+		connect(m_barSection[i], &QCheckBox::toggled, this, [this, i](bool on) {
+			if (m_store)
+				m_store->setBarSection(i, on);
+		});
+		barRow->addWidget(m_barSection[i]);
+	}
+	barRow->addStretch(1);
+
 	// --- pestanas
 	m_tabs = new QTabWidget(this);
 	m_tabs->addTab(buildQueueTab(), T("Tab.Queue"));
@@ -180,6 +197,7 @@ Dock::Dock(Store *store, TwitchChat *chat, Publisher *publisher, QWidget *parent
 	layout->setContentsMargins(6, 6, 6, 6);
 	layout->addLayout(top);
 	layout->addWidget(npBox);
+	layout->addLayout(barRow);
 	layout->addWidget(m_tabs, 1);
 
 	// varias modificaciones seguidas = un solo repintado
@@ -675,6 +693,10 @@ void Dock::refresh()
 		m_requestsToggle->setChecked(open);
 		m_requestsToggle->setText(open ? T("Dock.RequestsOpen") : T("Dock.RequestsClosed"));
 		m_requestsToggle->setToolTip(T("Dock.Requests.Tip"));
+	}
+	for (int i = 0; i < 3; i++) { // tambien cambian con los atajos de teclado
+		const QSignalBlocker block(m_barSection[i]);
+		m_barSection[i]->setChecked(m_store->barSection(i));
 	}
 	refreshNowPlaying();
 	refreshQueue();
