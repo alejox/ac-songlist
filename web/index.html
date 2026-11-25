@@ -106,13 +106,23 @@
 </div>
 <div class="toast" id="toast" role="status"></div>
 
-<script src="config.js"></script>
+<script src="/config.js"></script>
 <script>
 (function () {
   'use strict';
   var cfg = window.ACSL_CONFIG || {};
   var app = document.getElementById('app');
-  var channel = (new URLSearchParams(location.search).get('canal') || '').toLowerCase().replace(/[^a-z0-9_]/g, '').slice(0, 25);
+  // El canal va en la propia direccion (pagina/tu_canal); el formato antiguo ?canal=tu_canal sigue valiendo.
+  function channelFromUrl() {
+    var name = new URLSearchParams(location.search).get('canal') || '';
+    if (!name) {
+      var first = location.pathname.split('/').filter(Boolean)[0] || '';
+      try { first = decodeURIComponent(first); } catch (e) { first = ''; }
+      if (first.indexOf('.') < 0 && first.toLowerCase() !== 'index') name = first;
+    }
+    return name.toLowerCase().replace(/[^a-z0-9_]/g, '').slice(0, 25);
+  }
+  var channel = channelFromUrl();
 
   // --- utilidades -----------------------------------------------------------
   function el(tag, attrs, children) {
@@ -145,6 +155,11 @@
   if (!channel) {
     var input = el('input', { type: 'text', name: 'canal', placeholder: 'nombre_del_canal', autocomplete: 'off', 'aria-label': 'Canal de Twitch' });
     var form = el('form', null, [input, el('button', { class: 'btn', type: 'submit', text: 'Ver lista' })]);
+    form.addEventListener('submit', function (e) {
+      var name = input.value.toLowerCase().replace(/[^a-z0-9_]/g, '').slice(0, 25);
+      if (!name) { e.preventDefault(); return; }
+      if (location.protocol.indexOf('http') === 0) { e.preventDefault(); location.href = '/' + name; }
+    });
     app.appendChild(el('div', { class: 'card landing' }, [
       el('h1', { text: 'Lista de canciones' }),
       el('p', { class: 'sub', text: 'Escribe el canal de Twitch para ver las canciones que se pueden pedir.' }),
@@ -168,9 +183,15 @@
   var chipsEl = el('div', { class: 'chips' });
   var tableEl = el('div', { class: 'card table' });
 
-  app.appendChild(el('header', null, [el('div', null, [titleEl, subEl]), el('div', { class: 'status' }, [statusDot, statusText])]));
+  var statusEl = el('div', { class: 'status' }, [statusDot, statusText]);
+  var toolsEl = el('div', { class: 'tools' }, [search, countEl]);
+  app.appendChild(el('header', null, [el('div', null, [titleEl, subEl]), statusEl]));
   app.appendChild(nowEl); app.appendChild(queueEl); app.appendChild(howEl);
-  app.appendChild(el('div', { class: 'tools' }, [search, countEl]));
+  app.appendChild(toolsEl);
+  // Mientras el canal no haya publicado nada no hay nada que buscar ni estado que mostrar.
+  function setPublished(yes) {
+    [statusEl, toolsEl, howEl].forEach(function (node) { node.style.display = yes ? '' : 'none'; });
+  }
   app.appendChild(chipsEl); app.appendChild(tableEl);
 
   search.addEventListener('input', function () { state.query = search.value; renderTable(); });
@@ -326,10 +347,15 @@
       if (!rows.length) {
         state.songs = null;
         tableEl.textContent = '';
-        tableEl.appendChild(el('div', { class: 'empty', text: 'El canal «' + channel + '» todavía no ha publicado su lista de canciones.' }));
+        tableEl.appendChild(el('div', { class: 'empty' }, [
+          el('div', { text: 'El canal «' + channel + '» todavía no ha publicado su lista de canciones.' }),
+          el('div', { class: 'sub', style: 'margin-top:10px', text: '¿Es tu canal? En OBS, abre el panel AC Songlist y pulsa «Publicar mi lista». Esta página se llenará sola.' })
+        ]));
         countEl.textContent = ''; chipsEl.textContent = '';
+        setPublished(false);
         return false;
       }
+      setPublished(true);
       applyCatalog(rows[0]);
       return true;
     });

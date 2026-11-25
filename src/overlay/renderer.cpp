@@ -827,6 +827,8 @@ void drawSongList(QPainter &p, const OverlayStyle &s, const OverlayData &d)
 		if (d.songsTotal > 0)
 			label += QStringLiteral("  ·  %1").arg(d.songsTotal);
 		QString right = !d.requestsOpen ? d.lblClosed : (s.showHowTo ? d.lblHowTo : QString());
+		if (s.showWeb && !d.webUrl.isEmpty()) // donde ver la lista entera
+			right += (right.isEmpty() ? QString() : QStringLiteral("      ")) + (d.lblWeb.contains(QLatin1String("%1")) ? d.lblWeb.arg(d.webUrl) : d.webUrl);
 		if (d.pages > 1)
 			right += QStringLiteral("    %1 / %2").arg(d.page + 1).arg(d.pages);
 		top += drawHeader(p, s, inner, label, right);
@@ -972,10 +974,14 @@ void drawBarList(QPainter &p, const OverlayStyle &s, const OverlayData &d, const
 	const QRectF inner = g.left.adjusted(g.pad, g.pad, -g.pad, -g.pad);
 	double top = inner.top();
 	if (s.showLabel) {
-		QString label = d.lblSongList;
+		// la direccion de la pagina web, para quien quiera ver la lista entera;
+		// con ella el titulo va en corto para que quepan los dos
+		QString right = (s.showWeb && !d.webUrl.isEmpty()) ? d.webUrl : QString();
+		QString label = (right.isEmpty() || d.lblSongs.isEmpty()) ? d.lblSongList : d.lblSongs;
 		if (d.songsTotal > 0)
 			label += QStringLiteral("  ·  %1").arg(d.songsTotal);
-		const QString right = d.pages > 1 ? QStringLiteral("%1 / %2").arg(d.page + 1).arg(d.pages) : QString();
+		if (d.pages > 1)
+			right += (right.isEmpty() ? QString() : QStringLiteral("    ")) + QStringLiteral("%1 / %2").arg(d.page + 1).arg(d.pages);
 		top += drawHeader(p, s, inner, label, right);
 	}
 	const QFont rowFont = makeFont(s, g.f * kBarListScale, false);
@@ -1154,7 +1160,7 @@ QString barKey(const OverlayStyle &s, const OverlayData &d, double opacity)
 	     QString::number(d.queueTotal) + sep + QString::number(d.songsTotal) + sep + QString::number(d.page) + sep +
 	     QString::number(d.pages) + sep + QString::number(d.requestsOpen) + sep + d.lblNowPlaying + sep + d.lblQueue + sep +
 	     d.lblSongList + sep + d.lblRequestedBy + sep + d.lblHowTo + sep + d.lblClosed + sep + d.lblEmptyQueue + sep +
-	     d.lblEmptyList + QChar(0x1e);
+	     d.lblEmptyList + sep + d.lblWeb + sep + d.lblSongs + sep + d.webUrl + QChar(0x1e);
 	for (const OverlayRow &r : d.queue)
 		k += QString::number(r.number) + sep + r.title + sep + r.artist + sep + r.requester + QChar(0x1e);
 	k += QChar(0x1d);

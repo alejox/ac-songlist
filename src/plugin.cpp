@@ -97,6 +97,7 @@ Plugin::Plugin()
 	m_publisher->setEndpoint(qEnvironmentVariable("ACSL_WEB_API_URL", QStringLiteral(ACSL_WEB_API_URL)),
 				 qEnvironmentVariable("ACSL_WEB_API_KEY", QStringLiteral(ACSL_WEB_API_KEY)),
 				 qEnvironmentVariable("ACSL_WEB_PAGE_URL", QStringLiteral(ACSL_WEB_PAGE_URL)));
+	connect(m_publisher.get(), &Publisher::stateChanged, this, &Plugin::refresh); // la direccion sale en el overlay
 	blog(LOG_INFO, "[ac-songlist] pagina web publica: %s", m_publisher->available() ? "disponible" : "no disponible en esta version");
 
 	m_startedAt = QDateTime::currentMSecsSinceEpoch();
@@ -207,6 +208,11 @@ void Plugin::setLabels(OverlayData &d) const
 	d.lblClosed = T("Overlay.Closed");
 	d.lblEmptyQueue = T("Overlay.EmptyQueue");
 	d.lblEmptyList = T("Overlay.EmptyList");
+	d.lblWeb = T("Overlay.Web");
+	d.lblSongs = T("Overlay.Songs");
+	// la direccion solo se ensena cuando la lista esta de verdad en la web
+	if (m_publisher && m_publisher->state() == Publisher::State::Published)
+		d.webUrl = m_publisher->pageLabel();
 }
 
 // Lista de canciones, por paginas. identity queda vacio si no hay que mostrarla.
@@ -381,7 +387,7 @@ bool Plugin::updateBar(View &view, qint64 now, double dtMs)
 		      d.title + QChar(0x1f) + d.artist + QChar(0x1f) + d.requesters.join(QLatin1Char(',')) + QChar(0x1f) +
 		      (d.hasPlaying ? QLatin1Char('1') : QLatin1Char('0')) + QChar(0x1d) + QString::number(d.queueTotal) + QChar(0x1f) +
 		      QString::number(d.songsTotal) + QChar(0x1f) + QString::number(d.page) + QChar(0x1f) + QString::number(d.pages) +
-		      QChar(0x1f) + (d.requestsOpen ? QLatin1Char('1') : QLatin1Char('0')) + QChar(0x1d);
+		      QChar(0x1f) + (d.requestsOpen ? QLatin1Char('1') : QLatin1Char('0')) + QChar(0x1f) + d.webUrl + QChar(0x1d);
 	for (int i = 0; i < 3; i++)
 		sig += view.sectionIdentity[i] + QChar(0x1f) + QString::number(int(view.sectionOpacity[i] * 255)) + QChar(0x1d);
 	for (const OverlayRow &r : d.queue)
@@ -462,7 +468,7 @@ bool Plugin::updateView(View &view, qint64 now, double dtMs)
 		      QChar(0x1d) + view.identity + QChar(0x1d) + d.title + QChar(0x1f) + d.artist + QChar(0x1f) +
 		      d.requesters.join(QLatin1Char(',')) + QChar(0x1d) + QString::number(d.queueTotal) + QChar(0x1f) +
 		      QString::number(d.songsTotal) + QChar(0x1f) + QString::number(d.pages) + QChar(0x1f) +
-		      (d.requestsOpen ? QLatin1Char('1') : QLatin1Char('0')) + QChar(0x1d);
+		      (d.requestsOpen ? QLatin1Char('1') : QLatin1Char('0')) + QChar(0x1f) + d.webUrl + QChar(0x1d);
 	for (const OverlayRow &r : d.queue)
 		sig += joinRow(r);
 	for (const OverlayRow &r : d.songs)

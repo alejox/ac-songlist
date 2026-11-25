@@ -75,13 +75,13 @@ La búsqueda por nombre tolera acentos, mayúsculas, palabras sueltas y erratas 
 
 ![Página web pública](docs/web.png)
 
-En **Ajustes → Página web pública**, marca **Publicar mi lista en la web** y pulsa **Guardar y conectar**. Aparece el enlace de tu página (`https://ac-songlist.vercel.app/?canal=tu_canal`) con un botón para copiarlo.
+En el panel, pulsa **Publicar mi lista** (está debajo de las casillas de la barra). Con ese clic la lista queda en la web y el enlace copiado: `https://ac-songlist.vercel.app/tu_canal`. La misma fila muestra después el estado, el enlace y el botón **Copiar enlace**. Mientras está publicada, la dirección sale también en el overlay, en el encabezado de la lista de canciones.
 
 - La página muestra el catálogo completo, la canción que suena y la cola, y se pone al día sola.
 - Al tocar una canción en la página se copia su comando (`!sr 12`) para pegarlo en el chat.
 - Solo se publican las canciones **activas**. Las notas privadas no salen del equipo.
 - La primera vez, el plugin genera una clave secreta que queda guardada en tu equipo: es la que demuestra que esa lista es tuya. Si reinstalas OBS en otro ordenador, copia también el archivo de datos (ver más abajo) o no podrás actualizar esa página.
-- Al desmarcar la opción y guardar, tu lista se borra de la web.
+- Para retirarla: **Ajustes → Página web pública** y desmarca **Publicar mi lista en la web**. Se borra de la web al momento.
 
 El servicio y la página están en [`web/`](web/): un esquema de base de datos para Supabase ([`web/supabase/schema.sql`](web/supabase/schema.sql)) y una página estática sin paso de compilación, que Vercel publica en [ac-songlist.vercel.app](https://ac-songlist.vercel.app/) (el `vercel.json` de la raíz le indica que sirva solo esa carpeta).
 

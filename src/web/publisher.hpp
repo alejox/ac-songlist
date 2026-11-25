@@ -31,7 +31,8 @@ public:
 
 	bool available() const;  // hay servicio configurado y forma de hablar con el
 	bool active() const;     // ademas, el usuario lo activo y hay canal
-	QString pageUrl() const; // direccion publica de la lista de este canal
+	QString pageUrl() const;   // direccion publica de la lista de este canal
+	QString pageLabel() const; // la misma sin "https://", para mostrarla en pantalla
 	State state() const { return m_state; }
 	QString message() const { return m_message; } // detalle cuando hay error
 	QDateTime lastPublished() const { return m_lastPublished; }

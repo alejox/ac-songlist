@@ -186,6 +186,22 @@ Dock::Dock(Store *store, TwitchChat *chat, Publisher *publisher, QWidget *parent
 	}
 	barRow->addStretch(1);
 
+	// --- pagina web: un clic la publica y deja el enlace copiado
+	if (publisher && publisher->available()) {
+		m_webTop = new QWidget(this);
+		m_webTopLabel = new QLabel(m_webTop);
+		m_webTopLabel->setTextFormat(Qt::RichText);
+		m_webTopLabel->setOpenExternalLinks(true);
+		m_webTopLabel->setTextInteractionFlags(Qt::TextBrowserInteraction);
+		m_webTopLabel->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred); // un enlace largo no ensancha el panel
+		m_webTopButton = new QPushButton(m_webTop);
+		connect(m_webTopButton, &QPushButton::clicked, this, &Dock::webTopClicked);
+		auto *webRow = new QHBoxLayout(m_webTop);
+		webRow->setContentsMargins(0, 0, 0, 0);
+		webRow->addWidget(m_webTopLabel, 1);
+		webRow->addWidget(m_webTopButton);
+	}
+
 	// --- pestanas
 	m_tabs = new QTabWidget(this);
 	m_tabs->addTab(buildQueueTab(), T("Tab.Queue"));
@@ -198,6 +214,8 @@ Dock::Dock(Store *store, TwitchChat *chat, Publisher *publisher, QWidget *parent
 	layout->addLayout(top);
 	layout->addWidget(npBox);
 	layout->addLayout(barRow);
+	if (m_webTop)
+		layout->addWidget(m_webTop);
 	layout->addWidget(m_tabs, 1);
 
 	// varias modificaciones seguidas = un solo repintado
@@ -579,6 +597,7 @@ QWidget *Dock::buildSettingsTab()
 		webHelp->setWordWrap(true);
 		webHelp->setEnabled(false);
 		m_webEnabled = new QCheckBox(T("Web.Enable"), web);
+		connect(m_webEnabled, &QCheckBox::toggled, this, &Dock::setWebEnabled); // se aplica al momento, sin "Guardar"
 		m_webLink = new QLabel(web);
 		m_webLink->setTextFormat(Qt::RichText);
 		m_webLink->setOpenExternalLinks(true);
@@ -679,6 +698,52 @@ void Dock::saveSettings()
 	m_channel->setText(c.channel);
 	m_settingsSaved->setText(T("Settings.Saved"));
 	QTimer::singleShot(4000, m_settingsSaved, [label = m_settingsSaved]() { label->clear(); });
+}
+
+// Publica o retira la lista de la web al instante. Al activarla se genera la clave de este
+// equipo; al desactivarla se borra de la web lo que hubiera publicado.
+void Dock::setWebEnabled(bool on)
+{
+	if (!m_store)
+		return;
+	Settings c = m_store->settings();
+	if (c.webEnabled != on) {
+		const Settings previous = c;
+		c.webEnabled = on;
+		if (on && c.webKey.size() < 32)
+			c.webKey = Publisher::newKey();
+		if (!on && m_publisher && !previous.channel.isEmpty() && !previous.webKey.isEmpty())
+			m_publisher->unpublish(previous.channel, previous.webKey);
+		m_store->setSettings(c);
+	}
+	if (m_webEnabled) {
+		const QSignalBlocker block(m_webEnabled);
+		m_webEnabled->setChecked(on);
+	}
+	refreshWebStatus();
+}
+
+// Boton de la fila de la pagina web: publica si hacia falta y copia el enlace.
+void Dock::webTopClicked()
+{
+	if (!m_store || !m_publisher)
+		return;
+	if (m_store->settings().channel.isEmpty()) {
+		// sin canal no hay direccion: se lleva al usuario a escribirlo
+		m_tabs->setCurrentIndex(m_tabs->count() - 1);
+		m_channel->setFocus();
+		m_settingsSaved->setText(T("Web.Status.NoChannel"));
+		return;
+	}
+	if (!m_store->settings().webEnabled)
+		setWebEnabled(true);
+	QGuiApplication::clipboard()->setText(m_publisher->pageUrl());
+	m_webCopied = true;
+	refreshWebStatus();
+	QTimer::singleShot(2200, this, [this]() {
+		m_webCopied = false;
+		refreshWebStatus();
+	});
 }
 
 // ---------------------------------------------------------------- refrescos
@@ -885,6 +950,35 @@ void Dock::refreshWebStatus()
 		}
 	}
 	m_webStatus->setText(text);
+
+	// fila de arriba: estado en una linea y el boton que toca en cada momento
+	if (!m_webTop)
+		return;
+	QString color = QStringLiteral("#888888"), line;
+	const QString link = QStringLiteral("<a href=\"%1\">%2</a>").arg(url.toHtmlEscaped(), m_publisher->pageLabel().toHtmlEscaped());
+	if (!c.webEnabled || c.channel.isEmpty()) {
+		line = T("Web.Top.Off").toHtmlEscaped();
+	} else {
+		switch (m_publisher->state()) {
+		case Publisher::State::Off:
+		case Publisher::State::Pending:
+			color = QStringLiteral("#e3b341");
+			line = T("Web.Status.Pending").toHtmlEscaped();
+			break;
+		case Publisher::State::Published:
+			color = QStringLiteral("#3fb950");
+			line = link;
+			break;
+		case Publisher::State::Error:
+			color = QStringLiteral("#f85149");
+			line = text.toHtmlEscaped();
+			break;
+		}
+	}
+	m_webTopLabel->setText(QStringLiteral("<span style=\"color:%1\">\u25cf</span> %2").arg(color, line));
+	m_webTopLabel->setToolTip(on ? text + QStringLiteral("\n") + url : T("Web.Top.Publish.Tip"));
+	m_webTopButton->setText(m_webCopied ? T("Web.Copied") : on ? T("Web.Copy") : T("Web.Top.Publish"));
+	m_webTopButton->setToolTip(on ? T("Web.Copy.Tip") : T("Web.Top.Publish.Tip"));
 }
 
 void Dock::refreshChatStatus()

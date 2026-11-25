@@ -567,7 +567,16 @@ static void testPublisher()
 	CHECK(c.webKey != Publisher::newKey());
 	s.setSettings(c);
 	CHECK(pub.active());
-	CHECK_EQ(pub.pageUrl(), QString("https://pagina.invalid/lista/?canal=micanal"));
+	CHECK_EQ(pub.pageUrl(), QString("https://pagina.invalid/lista/micanal")); // direccion corta
+	CHECK_EQ(pub.pageLabel(), QString("pagina.invalid/lista/micanal"));
+	{
+		Publisher other(&s); // una pagina que no es carpeta recibe el canal como parametro
+		other.setEndpoint("https://api.invalid", "clave", "https://pagina.invalid/lista.html");
+		CHECK_EQ(other.pageUrl(), QString("https://pagina.invalid/lista.html?canal=micanal"));
+		other.setEndpoint("https://api.invalid", "clave", "http://pagina.invalid/?x=1");
+		CHECK_EQ(other.pageUrl(), QString("http://pagina.invalid/?x=1&canal=micanal"));
+		CHECK_EQ(other.pageLabel(), QString("pagina.invalid/?x=1&canal=micanal"));
+	}
 	CHECK(waitFor([&]() { return pub.state() == Publisher::State::Published; }));
 	CHECK_EQ(count(), 1);
 	QJsonObject r = last();

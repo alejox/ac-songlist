@@ -46,6 +46,8 @@ static OverlayData sampleData()
 	d.lblClosed = "Pedidos cerrados";
 	d.lblEmptyQueue = "Sin pedidos";
 	d.lblEmptyList = QStringLiteral("A\u00fan no hay canciones");
+	d.lblWeb = "Lista completa: %1";
+	d.lblSongs = "Canciones";
 	return d;
 }
 
@@ -181,6 +183,13 @@ int main(int argc, char **argv)
 		barData.queue.removeLast();
 	barData.pages = 12;
 	saveOnScene(renderOverlay(bar, barData, 1.0, 0.4), dir + "/20-barra.png");
+
+	OverlayData barWeb = barData; // con la lista publicada: la direccion va en la cabecera
+	barWeb.webUrl = "ac-songlist.vercel.app/argeplaying";
+	saveOnScene(renderOverlay(bar, barWeb, 1.0, 0.4), dir + "/25-barra-con-web.png");
+	OverlayData listWeb = d;
+	listWeb.webUrl = barWeb.webUrl;
+	saveOnBackdrop(renderOverlay(list, listWeb), dir + "/26-lista-con-web.png");
 
 	OverlayData barLong = barData;
 	barLong.title = longData.title;

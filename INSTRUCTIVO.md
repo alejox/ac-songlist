@@ -134,16 +134,28 @@ Si dos personas piden la misma canción, no se duplica: la segunda se suma al pe
 
 ## 7. Página web pública
 
-Si quieres que tu público vea la lista completa fuera del stream:
+Para que tu público vea la lista completa fuera del stream:
 
-1. Pestaña **Ajustes → Página web pública**.
-2. Marca **Publicar mi lista en la web** y pulsa **Guardar y conectar**.
-3. Copia el enlace con **Copiar enlace** y compártelo (en el panel del canal, en un comando del chat, en redes).
+1. En el panel AC Songlist, debajo de las casillas de la barra, pulsa **Publicar mi lista**.
+2. Listo. La lista ya está en la web y el enlace quedó copiado: pégalo donde quieras compartirlo (el panel de tu canal, un comando de tu bot, tus redes).
+
+Tu dirección es `https://ac-songlist.vercel.app/tu_canal`. Si todavía no habías escrito tu canal, el botón te lleva a **Ajustes** para que lo pongas.
+
+Esa fila del panel queda siempre a la vista:
+
+| Punto | Significado |
+|---|---|
+| 🟢 Verde, con tu enlace | Publicada. Pulsa el enlace para abrirla o **Copiar enlace** |
+| 🟡 Amarillo, «Publicando…» | Espera unos segundos |
+| 🔴 Rojo | No se pudo publicar; el texto dice por qué |
+| ⚪ Gris, «sin publicar» | Pulsa **Publicar mi lista** |
 
 La página tiene buscador y filtro por categoría, muestra la canción que suena y la cola, y **se actualiza sola**: cuando agregas una canción en OBS, aparece resaltada a los pocos segundos. Al tocar una canción se copia su comando (`!sr 12`).
 
+- **La dirección también sale en el stream**, en el encabezado de la lista de canciones (y del panel de lista de la barra). Si no la quieres ahí, desmarca **Mostrar la dirección de la página web** en las propiedades de la fuente.
+- Si usas un bot de chat (StreamElements, Nightbot…), crea un comando que responda con tu enlace; por ejemplo, que `!lista` conteste con la dirección mientras el plugin muestra la lista en pantalla.
 - Solo se publican las canciones activas; tus notas privadas no salen del equipo.
-- Para dejar de publicar, desmarca la opción y guarda: la lista se borra de la web.
+- Para retirarla: **Ajustes → Página web pública** y desmarca **Publicar mi lista en la web**. Se borra de la web al momento.
 - La página queda ligada a este equipo por una clave que el plugin guarda con tus datos. Si cambias de ordenador, lleva también el archivo de datos (ver *Preguntas frecuentes*).
 
 ## 8. Atajos de teclado

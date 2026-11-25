@@ -47,6 +47,7 @@ struct OverlayStyle {
 	bool showNumbers = true;
 	bool hideWhenEmpty = false;
 	bool showHowTo = true; // "Pide con !sr" siempre visible en la cabecera de cola y lista
+	bool showWeb = true;   // direccion de la pagina web en la cabecera de la lista (si esta publicada)
 	QString label; // vacio = texto por defecto
 	QString idleText; // "sonando ahora": que mostrar cuando no suena nada (vacio = nada)
 
@@ -77,13 +78,14 @@ struct OverlayData {
 	int songsTotal = 0;
 
 	bool requestsOpen = true;
+	QString webUrl; // direccion de la pagina publica, sin "https://"; vacio = no publicada
 
 	// barra: opacidad de cada panel (lista, sonando, cola); 0 = apagado
 	double section[3] = {1.0, 1.0, 1.0};
 
 	// textos ya traducidos
 	QString lblNowPlaying, lblQueue, lblSongList, lblRequestedBy, lblHowTo, lblMore, lblClosed, lblEmptyQueue,
-		lblEmptyList;
+		lblEmptyList, lblWeb, lblSongs;
 };
 
 // Lo que no cambia de un fotograma al siguiente (paneles y texto de la barra) se guarda aqui

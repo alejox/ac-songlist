@@ -42,6 +42,8 @@ private:
 	void refreshWebStatus();
 	void loadSettings();
 	void saveSettings();
+	void setWebEnabled(bool on);
+	void webTopClicked();
 
 	QList<int> selectedSongIds() const;
 	int selectedQueueId() const;
@@ -80,6 +82,11 @@ private:
 	QCheckBox *m_webEnabled = nullptr;
 	QLabel *m_webLink = nullptr, *m_webStatus = nullptr;
 	QPushButton *m_webCopy = nullptr;
+	// fila de la pagina web, siempre a la vista: publicar con un clic y copiar el enlace
+	QWidget *m_webTop = nullptr;
+	QLabel *m_webTopLabel = nullptr;
+	QPushButton *m_webTopButton = nullptr;
+	bool m_webCopied = false;
 	QSpinBox *m_perUser, *m_maxQueue, *m_listSeconds;
 	QLabel *m_settingsSaved;
 };

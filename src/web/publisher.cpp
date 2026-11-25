@@ -120,7 +120,19 @@ QString Publisher::pageUrl() const
 	const QString channel = m_store->settings().channel;
 	if (m_pageUrl.isEmpty() || channel.isEmpty())
 		return QString();
+	// Direccion corta (pagina/tu_canal) cuando la pagina es una carpeta; si no, ?canal=tu_canal.
+	if (m_pageUrl.endsWith(QLatin1Char('/')))
+		return m_pageUrl + channel;
 	return m_pageUrl + (m_pageUrl.contains(QLatin1Char('?')) ? QLatin1Char('&') : QLatin1Char('?')) + QStringLiteral("canal=") + channel;
+}
+
+QString Publisher::pageLabel() const
+{
+	QString url = pageUrl();
+	for (const char *scheme : {"https://", "http://"})
+		if (url.startsWith(QLatin1String(scheme)))
+			url = url.mid(int(qstrlen(scheme)));
+	return url;
 }
 
 QString Publisher::newKey()

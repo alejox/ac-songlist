@@ -44,6 +44,7 @@ void readSettings(OverlaySource *ctx, obs_data_t *settings)
 	s.skin = OverlayStyle::Skin(qBound(0, int(obs_data_get_int(settings, "skin")), 3));
 	s.animate = obs_data_get_bool(settings, "animate");
 	s.showHowTo = obs_data_get_bool(settings, "show_howto");
+	s.showWeb = obs_data_get_bool(settings, "show_web");
 	s.width = qBound(64, int(obs_data_get_int(settings, "width")), 4096);
 	s.height = qBound(32, int(obs_data_get_int(settings, "height")), 4096);
 
@@ -213,6 +214,7 @@ bool modeChanged(obs_properties_t *props, obs_property_t *, obs_data_t *settings
 	setVisible(props, "padding", minimal || !np);
 	setVisible(props, "animate", bar || (!minimal && np));
 	setVisible(props, "show_howto", queue || list || bar);
+	setVisible(props, "show_web", list || bar);
 	setVisible(props, "accent_bar", np && minimal);
 	setVisible(props, "idle_text", np || bar);
 	setVisible(props, "show_requester", np || queue || bar);
@@ -292,6 +294,7 @@ obs_properties_t *sourceProperties(void *)
 	obs_properties_add_bool(props, "show_requester", obs_module_text("Source.ShowRequester"));
 	obs_properties_add_bool(props, "show_numbers", obs_module_text("Source.ShowNumbers"));
 	obs_properties_add_bool(props, "show_howto", obs_module_text("Source.ShowHowTo"));
+	obs_properties_add_bool(props, "show_web", obs_module_text("Source.ShowWeb"));
 	obs_properties_add_text(props, "idle_text", obs_module_text("Source.IdleText"), OBS_TEXT_DEFAULT);
 	obs_properties_add_bool(props, "hide_empty", obs_module_text("Source.HideEmpty"));
 	obs_properties_add_int(props, "rows", obs_module_text("Source.Rows"), 1, 40, 1);
@@ -307,6 +310,7 @@ void sourceDefaults(obs_data_t *settings)
 	obs_data_set_default_int(settings, "skin", OverlayStyle::Minimal);
 	obs_data_set_default_bool(settings, "animate", true);
 	obs_data_set_default_bool(settings, "show_howto", true);
+	obs_data_set_default_bool(settings, "show_web", true);
 	obs_data_set_default_int(settings, "width", kDefaults[0].width);
 	obs_data_set_default_int(settings, "height", kDefaults[0].height);
 
