@@ -4,6 +4,7 @@
 #include "chat/chat-link.hpp"
 #include "chat/twitch-chat.hpp"
 #include "net/https.hpp"
+#include "web/publisher.hpp"
 #include "web/web-config.hpp"
 
 #include <QCoreApplication>
@@ -197,6 +198,43 @@ static void testHttps()
 		report("el servicio valida lo que recibe", r.status == 400, "HTTP " + std::to_string(r.status));
 }
 
+// Ciclo completo contra el servicio real, tal como lo hace el plugin: publicar una lista de
+// prueba, comprobar que el servicio la acepta y borrarla. No deja nada publicado.
+static void testPublishCycle()
+{
+	if (QByteArray(ACSL_WEB_API_KEY).isEmpty()) {
+		std::printf("[ --- ] publicar en la web: esta version no trae la clave del servicio\n");
+		return;
+	}
+	Store store;
+	store.addSong("Cancion de prueba", "AC Songlist", {"Prueba"});
+	store.addSong(QStringLiteral("Otra con e\u00f1e y acent\u00f3"), "AC Songlist");
+	Settings c = store.settings();
+	c.channel = QStringLiteral("acsl_ci_%1").arg(QRandomGenerator::global()->bounded(100000, 999999));
+	c.webEnabled = true;
+	c.webKey = Publisher::newKey();
+
+	Publisher publisher(&store);
+	publisher.setDelays(50, 2000);
+	publisher.setEndpoint(QStringLiteral(ACSL_WEB_API_URL), QStringLiteral(ACSL_WEB_API_KEY), QStringLiteral(ACSL_WEB_PAGE_URL));
+	store.setSettings(c);
+	const bool published = waitFor([&]() { return publisher.state() == Publisher::State::Published; }, 30000);
+	report("publicar una lista en el servicio web", published,
+	       published ? c.channel.toStdString() : "estado: " + publisher.message().toStdString());
+
+	// con otra clave no se puede tocar ese canal
+	const QUrl base(QStringLiteral(ACSL_WEB_API_URL));
+	const HttpHeaders headers{{"apikey", ACSL_WEB_API_KEY}, {"Authorization", QByteArray("Bearer ") + ACSL_WEB_API_KEY}};
+	const QByteArray other = "{\"p_channel\":\"" + c.channel.toLatin1() + "\",\"p_key\":\"" + Publisher::newKey().toLatin1() + "\"}";
+	const HttpResult denied = httpPostJson(QUrl(base.toString() + "/rest/v1/rpc/unpublish_catalog"), headers, other);
+	report("otra clave no puede borrar esa lista", denied.sent && denied.body.contains("42501"), "HTTP " + std::to_string(denied.status));
+
+	// y se borra con la suya, para no dejar rastro
+	const QByteArray mine = "{\"p_channel\":\"" + c.channel.toLatin1() + "\",\"p_key\":\"" + c.webKey.toLatin1() + "\"}";
+	const HttpResult removed = httpPostJson(QUrl(base.toString() + "/rest/v1/rpc/unpublish_catalog"), headers, mine);
+	report("borrar la lista de prueba", removed.sent && removed.body.contains("deleted"), removed.body.left(60).toStdString());
+}
+
 int main(int argc, char **argv)
 {
 	QCoreApplication app(argc, argv);
@@ -214,6 +252,7 @@ int main(int argc, char **argv)
 	probePlain();
 	std::printf("HTTPS disponible: %s\n", httpsAvailable() ? "si" : "no");
 	testHttps();
+	testPublishCycle();
 
 	std::printf("%s\n", g_failed ? "RESULTADO: hay fallos" : "RESULTADO: todo correcto");
 	return g_failed ? 1 : 0;

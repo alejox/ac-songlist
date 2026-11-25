@@ -278,7 +278,10 @@ void Publisher::onResult(quint64 id, const HttpResult &result, const QByteArray 
 		return;
 	}
 
-	if (result.sent && result.status == 403) {
+	// "Permiso denegado" (42501) es como el servicio dice que ese canal tiene otra clave. Segun
+	// quien llame, llega como 401 o como 403, asi que se mira el codigo y no solo el numero.
+	const QString errorCode = QJsonDocument::fromJson(result.body).object().value("code").toString();
+	if (result.sent && (result.status == 403 || errorCode == QLatin1String("42501"))) {
 		// Ese canal ya lo reclamo otra instalacion: reintentar no lo arregla.
 		m_blocked = true;
 		setState(State::Error, QStringLiteral("taken"));

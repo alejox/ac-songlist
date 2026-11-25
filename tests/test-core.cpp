@@ -581,7 +581,8 @@ static void testPublisher()
 	// otro equipo ya publica ese canal: se detiene, no insiste
 	{
 		std::lock_guard<std::mutex> lock(mutex);
-		script << reply(403, "{\"message\":\"este canal ya lo publica otra instalacion\"}");
+		// asi responde el servicio real: 401 con el codigo de "permiso denegado"
+		script << reply(401, "{\"code\":\"42501\",\"message\":\"este canal ya lo publica otra instalacion\"}");
 	}
 	s.addSong("Otra mas", "Alguien");
 	CHECK(waitFor([&]() { return pub.state() == Publisher::State::Error; }));
@@ -589,6 +590,16 @@ static void testPublisher()
 	s.addSong("Y otra", "Alguien");
 	waitFor([]() { return false; }, 200);
 	CHECK_EQ(count(), afterRecover + 1);
+
+	// una clave del servicio mal puesta (401 sin ese codigo) es otro error, no "canal ocupado"
+	{
+		std::lock_guard<std::mutex> lock(mutex);
+		script << reply(401, "{\"message\":\"Invalid API key\"}");
+	}
+	c = s.settings();
+	c.webKey = Publisher::newKey();
+	s.setSettings(c);
+	CHECK(waitFor([&]() { return pub.state() == Publisher::State::Error && pub.message() == QString("Invalid API key"); }));
 
 	// cambiar de canal lo desbloquea y vuelve a mandar todo
 	c = s.settings();

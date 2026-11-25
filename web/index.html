@@ -359,9 +359,19 @@
     Promise.all(jobs).then(function () { if (state.mode === 'off') setMode('poll'); }, function () { if (state.mode !== 'live') setMode('off'); });
   }
 
+  function loadScript(src) {
+    return new Promise(function (resolve, reject) {
+      var tag = document.createElement('script');
+      tag.src = src; tag.async = true; tag.onload = resolve; tag.onerror = reject;
+      document.head.appendChild(tag);
+    });
+  }
+
   function startRealtime() {
     if (!cfg.realtime) return;
-    import(cfg.realtime).then(function (lib) {
+    loadScript(cfg.realtime).then(function () {
+      var lib = window.supabase;
+      if (!lib || !lib.createClient) throw new Error('sin libreria');
       var client = lib.createClient(cfg.url, cfg.key, { auth: { persistSession: false }, realtime: { params: { eventsPerSecond: 5 } } });
       client.channel('acsl-' + channel)
         .on('postgres_changes', { event: '*', schema: 'public', table: 'catalog_live', filter: 'channel=eq.' + channel }, function (p) {
