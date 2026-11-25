@@ -81,7 +81,10 @@ Puedes agregar la fuente **varias veces**, una por cada modo, y colocar cada una
 
 Cada parte se enciende o se apaga desde el panel AC Songlist, con las casillas **Barra: Sonando · Cola · Lista** (están debajo de «Sonando ahora»). Las que quedan encendidas se reparten todo el ancho; si apagas la cola, por ejemplo, la lista se pone al lado de «Sonando ahora».
 
-En las propiedades de la fuente puedes cambiar el ancho y el alto (por defecto 1920 × 200; a más alto, más filas), el **ancho de «Sonando ahora»**, el color y la opacidad del cristal, el color de acento, las columnas de la lista y cada cuántos segundos cambia de página. «Sonando ahora» no desaparece al terminar una canción: el disco se detiene y se queda toda su información (título, artista y quién la pidió) con el rótulo **Última canción**, hasta que empiece la siguiente.
+En las propiedades de la fuente puedes cambiar el ancho y el alto (por defecto 1920 × 200; a más alto, más filas), el **ancho de «Sonando ahora»**, el color y la opacidad del cristal, el color de acento, las columnas de la lista y cada cuántos segundos cambia de página.
+
+- **Opacidad del fondo:** al 100 % la franja es sólida; si la bajas (98, 95…) empieza a verse lo que hay detrás.
+- **Letra más grande:** sube **Tamaño** en la tipografía de la fuente. Puede crecer hasta un 30 % del alto de la barra; si necesitas más, sube también el **Alto** (por ejemplo, 260). «Sonando ahora» no desaparece al terminar una canción: el disco se detiene y se queda toda su información (título, artista y quién la pidió) con el rótulo **Última canción**, hasta que empiece la siguiente.
 
 **Skins.** En las propiedades de la fuente, **Skin** permite elegir entre *Minimalista* y tres retro: *casete*, *equipo de sonido* y *vinilo*. Los retro tienen su propia paleta y solo toman tu **color de acento**; si no quieres movimiento, desmarca **Animar**.
 

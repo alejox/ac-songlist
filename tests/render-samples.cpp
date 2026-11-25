@@ -185,6 +185,23 @@ int main(int argc, char **argv)
 	barData.pages = 12;
 	saveOnScene(renderOverlay(bar, barData, 1.0, 0.4), dir + "/20-barra.png");
 
+	// opacidad del cristal: 100 = solido; al bajarla empieza a verse lo de detras
+	for (int opacity : {100, 95, 85}) {
+		OverlayStyle o = bar;
+		o.backgroundOpacity = opacity;
+		saveOnScene(renderOverlay(o, barData, 1.0, 0.4), dir + QString("/27-barra-opacidad-%1.png").arg(opacity));
+	}
+	OverlayStyle big = bar; // letra grande (Tamano 56 con el alto por defecto)
+	big.fontSize = 56;
+	big.backgroundOpacity = 100;
+	OverlayData bigData = d;
+	const BarLayout bigLayout = barLayout(big);
+	while (bigData.songs.size() > bigLayout.listRows * bigLayout.listColumns)
+		bigData.songs.removeLast();
+	while (bigData.queue.size() > bigLayout.queueRows)
+		bigData.queue.removeLast();
+	saveOnScene(renderOverlay(big, bigData, 1.0, 0.4), dir + "/28-barra-letra-grande.png");
+
 	OverlayData barWeb = barData; // con la lista publicada: la direccion va en la cabecera
 	barWeb.webUrl = "ac-songlist.vercel.app/argeplaying";
 	saveOnScene(renderOverlay(bar, barWeb, 1.0, 0.4), dir + "/25-barra-con-web.png");

@@ -881,8 +881,8 @@ void drawSongList(QPainter &p, const OverlayStyle &s, const OverlayData &d)
 // separados por lineas finas. Cada parte se enciende y se apaga desde el panel de OBS;
 // las que quedan encendidas se reparten el ancho.
 
-const double kBarListScale = 0.44;  // letra de la lista respecto al titulo
-const double kBarQueueScale = 0.5;  // letra de la cola
+const double kBarListScale = 0.52;  // letra de la lista respecto al titulo
+const double kBarQueueScale = 0.58; // letra de la cola
 
 OverlayStyle clamped(const OverlayStyle &style)
 {
@@ -908,7 +908,8 @@ struct BarGeom {
 BarGeom barGeom(const OverlayStyle &s, const bool on[3])
 {
 	BarGeom g;
-	g.f = qMax(10.0, qMin(double(s.fontSize), s.height * 0.22));
+	// el tamano elegido manda, mientras quepa en el alto de la barra
+	g.f = qMax(10.0, qMin(double(s.fontSize), s.height * 0.3));
 	const double h = s.height;
 	g.panel = QRectF(0, 0, s.width, h);
 	g.pad = qMin(double(qMax(s.padding, 6)), h * 0.16);
@@ -939,7 +940,7 @@ BarGeom barGeom(const OverlayStyle &s, const bool on[3])
 	// las columnas pedidas, salvo que quedaran demasiado estrechas para leerse con las
 	// tres partes encendidas (asi la pagina no cambia de tamano al apagar una)
 	const double listW = s.width * (1 - nowShare) / 2;
-	g.listCols = qBound(1, s.columns, qMax(1, int((listW - g.pad * 2) / (g.f * 5.5))));
+	g.listCols = qBound(1, s.columns, qMax(1, int((listW - g.pad * 2) / (g.f * kBarListScale * 12.5))));
 	return g;
 }
 
@@ -951,7 +952,7 @@ void drawBarBackground(QPainter &p, const OverlayStyle &s, const BarGeom &g)
 	const QRectF r = g.panel;
 	if (s.backgroundOpacity > 0) {
 		QColor tint = s.backgroundColor;
-		tint.setAlphaF(qBound(0, s.backgroundOpacity, 100) / 100.0 * 0.7);
+		tint.setAlphaF(qBound(0, s.backgroundOpacity, 100) / 100.0); // 100 = solido; por debajo empieza a transparentar
 		p.fillRect(r, tint);
 		QLinearGradient shine(r.topLeft(), r.bottomLeft());
 		shine.setColorAt(0.0, QColor(255, 255, 255, 40));
@@ -1060,8 +1061,8 @@ void drawBarNow(QPainter &p, const OverlayStyle &s, const OverlayData &d, const 
 	if (natural > w)
 		titlePx = qMax(g.f * 0.7, titlePx * w / natural);
 	const QFont titleFont = makeFont(s, titlePx, s.bold);
-	const QFont labelFont = makeFont(s, g.f * 0.34, true, g.f * 0.07);
-	const QFont subFont = makeFont(s, g.f * 0.52, false);
+	const QFont labelFont = makeFont(s, g.f * 0.36, true, g.f * 0.07);
+	const QFont subFont = makeFont(s, g.f * 0.56, false);
 	const QFontMetricsF tfm(titleFont), lfm(labelFont), sfm(subFont);
 	const double gap = g.f * 0.1;
 	const double textH = (n.label.isEmpty() ? 0 : lfm.height() + gap) + tfm.height() + (n.sub.isEmpty() ? 0 : sfm.height() + gap * 0.5);
@@ -1090,7 +1091,7 @@ void drawBarQueue(QPainter &p, const OverlayStyle &s, const OverlayData &d, cons
 	const QFont rowFont = makeFont(s, g.f * kBarQueueScale, s.bold);
 	const QFont rowFontLight = makeFont(s, g.f * kBarQueueScale, false);
 	const QFont numFont = makeFont(s, g.f * kBarQueueScale, true);
-	const QFont byFont = makeFont(s, g.f * 0.38, false);
+	const QFont byFont = makeFont(s, g.f * 0.44, false);
 	const int shown = qMin(int(d.queue.size()), g.queueRows);
 	if (shown == 0) {
 		p.setFont(rowFontLight);
