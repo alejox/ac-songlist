@@ -9,6 +9,8 @@
 #include <QCoreApplication>
 #include <QElapsedTimer>
 #include <QFile>
+#include <QJsonArray>
+#include <QJsonObject>
 #include <QTemporaryDir>
 #include <QThread>
 #include <cstdio>
@@ -249,6 +251,54 @@ static void testPersistence()
 	CHECK(!s.settings().requestsOpen);
 	CHECK_EQ(s.addSong("Nueva", "Alguien"), 11); // los numeros no se reutilizan
 	CHECK(!s.load(dir.filePath("no-existe.json")));
+}
+
+static void testNumbering()
+{
+	Store s;
+	fill(s); // 1..10
+	s.request("ana", "3", "twitch");
+	s.request("beto", "5", "twitch");
+	s.next(); // suena la 3, queda la 5 en cola
+	s.next(); // la 3 va al historial, suena la 5
+	s.request("caro", "7", "twitch");
+
+	// borrar solo algunas no reinicia nada: los numeros no se reutilizan
+	s.removeSongs({9, 10});
+	CHECK_EQ(s.addSong("Otra", "Alguien"), 11);
+
+	// borrar toda la biblioteca: la siguiente vuelve a ser la 1
+	QList<int> all;
+	for (const Song &song : s.songs())
+		all << song.id;
+	s.removeSongs(all);
+	CHECK_EQ(s.songs().size(), 0);
+	// lo que estaba en cola, sonando o en el historial sigue ahi, pero sin numero
+	CHECK_EQ(s.playing().title, QString("Mi Corazón Encantado"));
+	CHECK_EQ(s.playing().songId, 0);
+	CHECK_EQ(s.queue().value(0).songId, 0);
+	CHECK_EQ(s.history().value(0).songId, 0);
+
+	int updated = 0;
+	CHECK_EQ(s.importSongs(parseSongsCsv("Uno,A\nDos,B\nTres,C\n"), &updated), 3);
+	CHECK_EQ(s.songs().value(0).id, 1);
+	CHECK_EQ(s.songs().value(2).id, 3);
+	// la nueva numero 5... no existe; y la vieja que suena no se confunde con ninguna nueva
+	CHECK(s.finishPlaying());
+	CHECK_EQ(s.song(1)->timesPlayed, 0);
+	CHECK_EQ(s.song(3)->timesPlayed, 0);
+
+	// tambien al cargar un archivo guardado con la biblioteca vacia y el contador alto
+	QTemporaryDir dir;
+	const QString path = dir.filePath("vacio.json");
+	Store empty;
+	fill(empty);
+	QJsonObject json = empty.toJson();
+	json["songs"] = QJsonArray();
+	json["nextSongId"] = 201;
+	Store loaded;
+	loaded.fromJson(json);
+	CHECK_EQ(loaded.addSong("Primera", "X"), 1);
 }
 
 static void testCsv()
@@ -653,6 +703,7 @@ int main(int argc, char **argv)
 	testRequests();
 	testQueueFlow();
 	testPersistence();
+	testNumbering();
 	testCsv();
 	testBot();
 	testIrc();

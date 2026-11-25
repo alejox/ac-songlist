@@ -49,7 +49,7 @@ La canción queda guardada con un **número fijo**. Ese número es el que usará
 - Un archivo de texto con una canción por línea: `Título - Artista`.
 - El archivo que exporta StreamerSonglist.
 
-Las repetidas no se duplican.
+Las repetidas no se duplican. Si borras **toda** la biblioteca y vuelves a importar, la numeración empieza otra vez en 1.
 
 **Otras acciones:**
 - **Buscar:** escribe en el buscador título, artista o número. No importan acentos ni mayúsculas.
@@ -72,7 +72,9 @@ Puedes agregar la fuente **varias veces**, una por cada modo, y colocar cada una
 
 **Recomendado para la lista:** activa **«Mostrar solo cuando alguien escribe !lista»**. Así no ocupa pantalla todo el tiempo y aparece cuando la piden.
 
-**Cambiar el aspecto** (en las propiedades de cada fuente): tipografía y tamaño, color del texto, color de acento, color y opacidad del fondo (0 = sin fondo), esquinas redondeadas, alineación, filas y columnas, y qué datos mostrar.
+**Skins.** En las propiedades de la fuente, **Skin** permite elegir entre *Minimalista* y tres retro: *casete*, *equipo de sonido* y *vinilo*. Los retro tienen su propia paleta y solo toman tu **color de acento**; si no quieres movimiento, desmarca **Animar**.
+
+**Cambiar el aspecto** (skin minimalista, en las propiedades de cada fuente): tipografía y tamaño, color del texto, color de acento, color y opacidad del fondo (0 = sin fondo), esquinas redondeadas, alineación, filas y columnas, y qué datos mostrar.
 
 ## 5. En directo
 

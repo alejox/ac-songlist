@@ -100,8 +100,25 @@ void Store::removeSongs(const QList<int> &ids)
 			m_songs.removeAt(i);
 			any = true;
 		}
-	if (any)
+	if (any) {
+		resetNumberingIfEmpty();
 		emit changed();
+	}
+}
+
+// Biblioteca vacia: la siguiente cancion vuelve a ser la numero 1. Los pedidos y el historial
+// que apuntaban a canciones borradas conservan su texto, pero se desligan del numero para que
+// no se confundan con las canciones nuevas que lo reutilicen.
+void Store::resetNumberingIfEmpty()
+{
+	if (!m_songs.isEmpty())
+		return;
+	m_nextSongId = 1;
+	for (QueueItem &q : m_queue)
+		q.songId = 0;
+	m_playing.songId = 0;
+	for (HistoryItem &h : m_history)
+		h.songId = 0;
 }
 
 static QString songKey(const QString &title, const QString &artist)
@@ -617,6 +634,7 @@ void Store::fromJson(const QJsonObject &root)
 	m_settings = s;
 
 	m_nextSongId = qMax(root.value("nextSongId").toInt(1), maxSong + 1);
+	resetNumberingIfEmpty();
 	m_nextQueueId = qMax(root.value("nextQueueId").toInt(1), maxQueue + 1);
 	m_nextHistoryId = qMax(root.value("nextHistoryId").toInt(1), maxHist + 1);
 	emit settingsChanged();

@@ -66,6 +66,7 @@ private:
 	QTimer m_saveTimer, m_animTimer, m_slowTimer;
 	std::vector<View> m_views;
 	qint64 m_lastRefresh = 0;
+	qint64 m_startedAt = 0;
 	qint64 m_listUntil = 0; // la lista "a pedido" se muestra hasta este momento
 	bool m_listRestart = false;
 };

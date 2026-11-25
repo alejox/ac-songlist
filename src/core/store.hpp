@@ -68,6 +68,7 @@ signals:
 private:
 	Song *songPtr(int id);
 	void returnPlayingToQueue();
+	void resetNumberingIfEmpty();
 	void registerPlay(const QueueItem &item);
 
 	QList<Song> m_songs;

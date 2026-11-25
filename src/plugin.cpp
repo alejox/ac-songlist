@@ -91,6 +91,7 @@ Plugin::Plugin()
 	}
 	blog(LOG_INFO, "[ac-songlist] %d canciones cargadas", int(m_store.songs().size()));
 
+	m_startedAt = QDateTime::currentMSecsSinceEpoch();
 	m_bot = std::make_unique<Bot>(&m_store, [](const char *key) { return T(key); });
 
 	m_saveTimer.setSingleShot(true);
@@ -304,9 +305,17 @@ bool Plugin::updateView(View &view, qint64 now, double dtMs)
 		}
 	}
 
+	// Skins con movimiento (carretes, disco, ecualizador): se redibujan unas 15 veces por segundo
+	// mientras hay algo en pantalla.
+	const bool moving = isAnimated(view.style) && !view.identity.isEmpty();
+	if (moving)
+		animating = true;
+	const qint64 frame = moving ? now / 66 : 0;
+
 	// firma de lo que se ve: solo se redibuja si cambia
 	const OverlayData &d = view.data;
-	QString sig = QString::number(view.styleVersion) + QChar(0x1d) + QString::number(int(view.opacity * 255)) +
+	QString sig = QString::number(view.styleVersion) + QChar(0x1d) + QString::number(frame) + QChar(0x1d) +
+		      QString::number(int(view.opacity * 255)) +
 		      QChar(0x1d) + view.identity + QChar(0x1d) + d.title + QChar(0x1f) + d.artist + QChar(0x1f) +
 		      d.requesters.join(QLatin1Char(',')) + QChar(0x1d) + QString::number(d.queueTotal) + QChar(0x1f) +
 		      QString::number(d.songsTotal) + QChar(0x1f) + QString::number(d.pages) + QChar(0x1f) +
@@ -321,7 +330,9 @@ bool Plugin::updateView(View &view, qint64 now, double dtMs)
 
 	// ease-out: el fundido arranca rapido y frena al final
 	const double eased = 1.0 - (1.0 - view.opacity) * (1.0 - view.opacity);
-	QImage image = renderOverlay(view.style, view.data, view.identity.isEmpty() ? 0.0 : eased);
+	// reloj de la animacion: segundos desde que arranco el plugin (un numero pequeno, sin saltos)
+	const double seconds = double(now - m_startedAt) / 1000.0;
+	QImage image = renderOverlay(view.style, view.data, view.identity.isEmpty() ? 0.0 : eased, seconds);
 	{
 		std::lock_guard<std::mutex> lock(view.shared->mutex);
 		view.shared->image = std::move(image);

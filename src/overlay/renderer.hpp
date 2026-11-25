@@ -14,8 +14,12 @@ struct OverlayStyle {
 	enum Mode { NowPlaying = 0, Queue = 1, SongList = 2 };
 	enum Align { Left = 0, Center = 1, Right = 2 };
 	enum VAlign { Top = 0, Middle = 1, Bottom = 2 };
+	// Aspecto. Los retro traen su propia paleta; de los colores elegidos solo usan el de acento.
+	enum Skin { Minimal = 0, Cassette = 1, Led = 2, Vinyl = 3 };
 
 	Mode mode = NowPlaying;
+	Skin skin = Minimal;
+	bool animate = true; // carretes, disco y ecualizador en movimiento (solo skins retro)
 	int width = 900;
 	int height = 180;
 
@@ -40,6 +44,7 @@ struct OverlayStyle {
 	bool showRequester = true;
 	bool showNumbers = true;
 	bool hideWhenEmpty = false;
+	bool showHowTo = true; // "Pide con !sr" siempre visible en la cabecera de cola y lista
 	QString label; // vacio = texto por defecto
 	QString idleText; // "sonando ahora": que mostrar cuando no suena nada (vacio = nada)
 
@@ -76,8 +81,14 @@ struct OverlayData {
 };
 
 // Imagen RGBA premultiplicada del tamano style.width x style.height.
-// opacity (0..1) se usa para los fundidos.
-QImage renderOverlay(const OverlayStyle &style, const OverlayData &data, double opacity = 1.0);
+// opacity (0..1) se usa para los fundidos; seconds es el reloj de las animaciones.
+QImage renderOverlay(const OverlayStyle &style, const OverlayData &data, double opacity = 1.0, double seconds = 0.0);
+
+// true si ese estilo se mueve solo y hay que redibujarlo varias veces por segundo.
+inline bool isAnimated(const OverlayStyle &s)
+{
+	return s.animate && s.skin != OverlayStyle::Minimal && s.mode == OverlayStyle::NowPlaying;
+}
 
 // Canciones por pagina en el modo lista.
 inline int songsPerPage(const OverlayStyle &s)

@@ -21,11 +21,14 @@ Plugin nativo de OBS (C++/Qt) para streamers que tocan en directo. Sin servicios
   - *Sonando ahora*: la tarjeta de la canción actual, con fundido al cambiar.
   - *Cola de pedidos*: los siguientes pedidos y quién los pidió.
   - *Lista de canciones*: la biblioteca numerada, por páginas. Puede estar siempre visible o aparecer solo cuando alguien escribe `!lista`.
+- **Skins retro** además del minimalista: casete (con carretes que giran), equipo de sonido (display de puntos con ecualizador y marquesina) y vinilo (disco girando). Sirven para la tarjeta, la cola y la lista.
 - **Estilo neutro y configurable** desde las propiedades de la fuente: tipografía, tamaño, colores de texto, acento y fondo, opacidad (0 = sin fondo), esquinas, márgenes, alineación, encabezado, filas y columnas.
 - **Chat de Twitch** sin iniciar sesión ni tokens: solo escribes el nombre de tu canal. La conexión va cifrada y es de solo lectura.
 - **Atajos de teclado** en *Ajustes → Atajos*: siguiente canción, terminar la actual, abrir/cerrar pedidos, mostrar la lista.
 
 ![Cola y lista](docs/cola-y-lista.png)
+
+![Skins retro](docs/skins.png)
 
 ## Instalación
 

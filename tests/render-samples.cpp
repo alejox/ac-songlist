@@ -123,5 +123,27 @@ int main(int argc, char **argv)
 	list.rows = 8;
 	list.columns = 3;
 	saveOnBackdrop(renderOverlay(list, d), dir + "/07-lista.png");
+
+	// skins retro: sonando ahora (con titulo normal y con uno largo), cola y lista
+	const char *names[] = {"minimal", "casete", "equipo", "vinilo"};
+	const QColor accents[] = {QColor(56, 189, 248), QColor(214, 73, 51), QColor(255, 176, 0), QColor(196, 148, 72)};
+	for (int skin = 1; skin <= 3; skin++) {
+		OverlayStyle now = np;
+		now.skin = OverlayStyle::Skin(skin);
+		now.accentColor = accents[skin];
+		now.height = 200;
+		saveOnBackdrop(renderOverlay(now, d, 1.0, 0.7), dir + QString("/1%1-%2-sonando.png").arg(skin).arg(names[skin]));
+		saveOnBackdrop(renderOverlay(now, longData, 1.0, 6.3), dir + QString("/1%1-%2-sonando-largo.png").arg(skin).arg(names[skin]));
+
+		OverlayStyle queue = q;
+		queue.skin = OverlayStyle::Skin(skin);
+		queue.accentColor = accents[skin];
+		saveOnBackdrop(renderOverlay(queue, d), dir + QString("/1%1-%2-cola.png").arg(skin).arg(names[skin]));
+
+		OverlayStyle songs = list;
+		songs.skin = OverlayStyle::Skin(skin);
+		songs.accentColor = accents[skin];
+		saveOnBackdrop(renderOverlay(songs, d), dir + QString("/1%1-%2-lista.png").arg(skin).arg(names[skin]));
+	}
 	return 0;
 }

@@ -40,6 +40,9 @@ void readSettings(OverlaySource *ctx, obs_data_t *settings)
 {
 	OverlayStyle s;
 	s.mode = OverlayStyle::Mode(qBound(0, int(obs_data_get_int(settings, "mode")), 2));
+	s.skin = OverlayStyle::Skin(qBound(0, int(obs_data_get_int(settings, "skin")), 3));
+	s.animate = obs_data_get_bool(settings, "animate");
+	s.showHowTo = obs_data_get_bool(settings, "show_howto");
 	s.width = qBound(64, int(obs_data_get_int(settings, "width")), 4096);
 	s.height = qBound(32, int(obs_data_get_int(settings, "height")), 4096);
 
@@ -197,7 +200,16 @@ bool modeChanged(obs_properties_t *props, obs_property_t *, obs_data_t *settings
 	const bool np = mode == OverlayStyle::NowPlaying;
 	const bool queue = mode == OverlayStyle::Queue;
 	const bool list = mode == OverlayStyle::SongList;
-	setVisible(props, "accent_bar", np);
+	// Los skins retro traen su paleta: solo usan el color de acento.
+	const bool minimal = obs_data_get_int(settings, "skin") == OverlayStyle::Minimal;
+	setVisible(props, "text_color", minimal);
+	setVisible(props, "bg_color", minimal);
+	setVisible(props, "bg_opacity", minimal);
+	setVisible(props, "radius", minimal);
+	setVisible(props, "padding", minimal || !np);
+	setVisible(props, "animate", !minimal && np);
+	setVisible(props, "show_howto", queue || list);
+	setVisible(props, "accent_bar", np && minimal);
 	setVisible(props, "idle_text", np);
 	setVisible(props, "show_requester", np || queue);
 	setVisible(props, "show_numbers", queue || list);
@@ -230,6 +242,15 @@ obs_properties_t *sourceProperties(void *)
 	obs_property_list_add_int(mode, obs_module_text("Source.Mode.SongList"), OverlayStyle::SongList);
 	obs_property_set_modified_callback(mode, modeChanged);
 
+	obs_property_t *skin = obs_properties_add_list(props, "skin", obs_module_text("Source.Skin"), OBS_COMBO_TYPE_LIST,
+						       OBS_COMBO_FORMAT_INT);
+	obs_property_list_add_int(skin, obs_module_text("Source.Skin.Minimal"), OverlayStyle::Minimal);
+	obs_property_list_add_int(skin, obs_module_text("Source.Skin.Cassette"), OverlayStyle::Cassette);
+	obs_property_list_add_int(skin, obs_module_text("Source.Skin.Led"), OverlayStyle::Led);
+	obs_property_list_add_int(skin, obs_module_text("Source.Skin.Vinyl"), OverlayStyle::Vinyl);
+	obs_property_set_modified_callback(skin, modeChanged);
+	obs_properties_add_bool(props, "animate", obs_module_text("Source.Animate"));
+
 	obs_properties_add_int(props, "width", obs_module_text("Source.Width"), 64, 4096, 10);
 	obs_properties_add_int(props, "height", obs_module_text("Source.Height"), 32, 4096, 10);
 
@@ -258,6 +279,7 @@ obs_properties_t *sourceProperties(void *)
 	obs_properties_add_bool(props, "show_artist", obs_module_text("Source.ShowArtist"));
 	obs_properties_add_bool(props, "show_requester", obs_module_text("Source.ShowRequester"));
 	obs_properties_add_bool(props, "show_numbers", obs_module_text("Source.ShowNumbers"));
+	obs_properties_add_bool(props, "show_howto", obs_module_text("Source.ShowHowTo"));
 	obs_properties_add_text(props, "idle_text", obs_module_text("Source.IdleText"), OBS_TEXT_DEFAULT);
 	obs_properties_add_bool(props, "hide_empty", obs_module_text("Source.HideEmpty"));
 	obs_properties_add_int(props, "rows", obs_module_text("Source.Rows"), 1, 40, 1);
@@ -270,6 +292,9 @@ obs_properties_t *sourceProperties(void *)
 void sourceDefaults(obs_data_t *settings)
 {
 	obs_data_set_default_int(settings, "mode", OverlayStyle::NowPlaying);
+	obs_data_set_default_int(settings, "skin", OverlayStyle::Minimal);
+	obs_data_set_default_bool(settings, "animate", true);
+	obs_data_set_default_bool(settings, "show_howto", true);
 	obs_data_set_default_int(settings, "width", kDefaults[0].width);
 	obs_data_set_default_int(settings, "height", kDefaults[0].height);
 
