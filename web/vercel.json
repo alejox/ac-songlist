@@ -1,5 +1,4 @@
 {
-  "cleanUrls": true,
   "headers": [
     {
       "source": "/(.*)",
@@ -21,11 +20,11 @@
   ],
   "rewrites": [
     {
-      "source": "/:canal([^/.]+)",
+      "source": "/:canal",
       "destination": "/index.html"
     },
     {
-      "source": "/:canal([^/.]+)/",
+      "source": "/:canal/",
       "destination": "/index.html"
     }
   ]
