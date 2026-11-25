@@ -1092,7 +1092,11 @@ void drawBarQueue(QPainter &p, const OverlayStyle &s, const OverlayData &d, cons
 	const QFont rowFontLight = makeFont(s, g.f * kBarQueueScale, false);
 	const QFont numFont = makeFont(s, g.f * kBarQueueScale, true);
 	const QFont byFont = makeFont(s, g.f * 0.44, false);
-	const int shown = qMin(int(d.queue.size()), g.queueRows);
+	int shown = qMin(int(d.queue.size()), g.queueRows);
+	// si no caben todos, la ultima fila avisa de cuantos mas hay
+	if (d.queueTotal > shown && g.queueRows >= 2)
+		shown = qMin(shown, g.queueRows - 1);
+	const int extra = d.queueTotal - shown;
 	if (shown == 0) {
 		p.setFont(rowFontLight);
 		p.setPen(s.mutedColor);
@@ -1139,6 +1143,12 @@ void drawBarQueue(QPainter &p, const OverlayStyle &s, const OverlayData &d, cons
 		}
 		y += g.queueRowH;
 	}
+	if (extra > 0 && g.queueRows >= 2) {
+		p.setFont(rowFontLight);
+		p.setPen(s.mutedColor);
+		p.drawText(QRectF(inner.left() + numW, y, inner.width() - numW, g.queueRowH), Qt::AlignLeft | Qt::AlignVCenter | Qt::TextSingleLine,
+			   d.lblMore.arg(extra));
+	}
 }
 
 void drawBar(QPainter &p, const OverlayStyle &style, const OverlayData &d, double opacity, double seconds, BarLayer layer = BarAll)
@@ -1180,7 +1190,7 @@ QString barKey(const OverlayStyle &s, const OverlayData &d, double opacity)
 	     QString::number(d.queueTotal) + sep + QString::number(d.songsTotal) + sep + QString::number(d.page) + sep +
 	     QString::number(d.pages) + sep + QString::number(d.requestsOpen) + sep + d.lblNowPlaying + sep + d.lblQueue + sep +
 	     d.lblSongList + sep + d.lblRequestedBy + sep + d.lblHowTo + sep + d.lblClosed + sep + d.lblEmptyQueue + sep +
-	     d.lblEmptyList + sep + d.lblWeb + sep + d.lblSongs + sep + d.lblLastSong + sep + d.webUrl + QChar(0x1e);
+	     d.lblEmptyList + sep + d.lblWeb + sep + d.lblSongs + sep + d.lblLastSong + sep + d.lblMore + sep + d.webUrl + QChar(0x1e);
 	for (const OverlayRow &r : d.queue)
 		k += QString::number(r.number) + sep + r.title + sep + r.artist + sep + r.requester + QChar(0x1e);
 	k += QChar(0x1d);
