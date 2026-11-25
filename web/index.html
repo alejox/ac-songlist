@@ -1,0 +1,387 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lista de canciones · AC Songlist</title>
+<meta name="description" content="Lista de canciones para pedir en directo, actualizada en vivo desde OBS.">
+<style>
+  :root {
+    --bg: #0f1115; --panel: #171a21; --panel-2: #1d212a; --line: #2a2f3a;
+    --text: #e8eaf0; --muted: #9aa3b2; --accent: #38bdf8; --accent-ink: #062233;
+    --ok: #3fb950; --warn: #d4a72c; --hot: #f97066;
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg: #f5f6f8; --panel: #ffffff; --panel-2: #f0f2f5; --line: #dfe3ea;
+      --text: #16181d; --muted: #5d6675; --accent: #0b6fa4; --accent-ink: #ffffff;
+    }
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+    font: 16px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+  .wrap { max-width: 1000px; margin: 0 auto; padding: 20px 16px 60px; }
+  header { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+  h1 { font-size: 1.6rem; line-height: 1.2; margin: 0; letter-spacing: -0.01em; overflow-wrap: anywhere; }
+  .sub { color: var(--muted); font-size: 0.92rem; margin-top: 4px; }
+  .status { display: inline-flex; align-items: center; gap: 7px; font-size: 0.82rem; color: var(--muted); white-space: nowrap; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); flex: none; }
+  .dot.live { background: var(--ok); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok) 25%, transparent); }
+  .dot.poll { background: var(--warn); }
+  .dot.off { background: var(--hot); }
+
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; }
+  .now { display: flex; gap: 14px; padding: 14px 16px; margin-bottom: 12px; border-left: 4px solid var(--accent); }
+  .now .lbl { font-size: 0.72rem; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent); }
+  .now .title { font-size: 1.25rem; font-weight: 700; overflow-wrap: anywhere; }
+  .now .meta { color: var(--muted); font-size: 0.92rem; overflow-wrap: anywhere; }
+  .queue { padding: 12px 16px; margin-bottom: 12px; }
+  .queue h2, .how h2 { font-size: 0.72rem; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); margin: 0 0 8px; }
+  .queue ol { margin: 0; padding: 0; list-style: none; counter-reset: q; }
+  .queue li { counter-increment: q; display: flex; gap: 10px; padding: 5px 0; border-top: 1px solid var(--line); }
+  .queue li:first-child { border-top: 0; }
+  .queue li::before { content: counter(q); color: var(--accent); font-weight: 700; min-width: 1.4em; }
+  .queue .song { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+  .queue .by { color: var(--muted); font-size: 0.85rem; text-align: right; overflow-wrap: anywhere; max-width: 40%; }
+  .closed { color: var(--hot); font-weight: 600; }
+
+  .how { padding: 12px 16px; margin-bottom: 16px; background: var(--panel-2); }
+  .how p { margin: 0; color: var(--muted); font-size: 0.95rem; }
+  code { font: 600 0.92em ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background: color-mix(in srgb, var(--accent) 16%, transparent);
+    color: var(--text); padding: 1px 6px; border-radius: 5px; }
+
+  .tools { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 10px; }
+  input[type=search] { flex: 1 1 240px; min-width: 0; font: inherit; color: var(--text); background: var(--panel); border: 1px solid var(--line);
+    border-radius: 10px; padding: 10px 12px; }
+  input[type=search]:focus-visible, button:focus-visible, th button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .count { color: var(--muted); font-size: 0.9rem; white-space: nowrap; }
+  .chips { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+  .chip { font: inherit; font-size: 0.86rem; color: var(--text); background: var(--panel); border: 1px solid var(--line); border-radius: 999px;
+    padding: 5px 12px; cursor: pointer; }
+  .chip[aria-pressed=true] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
+
+  .table { overflow: hidden; }
+  table { width: 100%; border-collapse: collapse; }
+  th { text-align: left; font-size: 0.72rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); padding: 0; border-bottom: 1px solid var(--line); }
+  th button { all: unset; display: block; width: 100%; box-sizing: border-box; padding: 10px 12px; cursor: pointer; }
+  th[aria-sort=ascending] button::after { content: " ▲"; }
+  th[aria-sort=descending] button::after { content: " ▼"; }
+  td { padding: 9px 12px; border-top: 1px solid var(--line); vertical-align: top; overflow-wrap: anywhere; }
+  tbody tr:first-child td { border-top: 0; }
+  tbody tr { cursor: pointer; }
+  tbody tr:hover { background: var(--panel-2); }
+  td.n { color: var(--accent); font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; width: 1%; }
+  td.t { font-weight: 600; }
+  td.a, td.c { color: var(--muted); }
+  td.p { color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; width: 1%; }
+  th.p button { text-align: right; }
+  .tag { display: inline-block; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.04em; border-radius: 5px; padding: 1px 6px; margin-left: 6px; vertical-align: 2px; }
+  .tag.playing { background: var(--accent); color: var(--accent-ink); }
+  .tag.queued { border: 1px solid var(--accent); color: var(--accent); }
+  @keyframes fresh { from { background: color-mix(in srgb, var(--accent) 35%, transparent); } to { background: transparent; } }
+  tr.fresh { animation: fresh 6s ease-out; }
+  .empty { padding: 28px 16px; text-align: center; color: var(--muted); }
+  .toast { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); background: var(--text); color: var(--bg); padding: 10px 16px;
+    border-radius: 10px; font-size: 0.92rem; box-shadow: 0 8px 24px rgba(0,0,0,.35); opacity: 0; pointer-events: none; transition: opacity .2s; max-width: calc(100vw - 32px); }
+  .toast.show { opacity: 1; }
+  .landing { padding: 22px 18px; }
+  .landing form { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
+  .landing input { flex: 1 1 200px; font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+  .btn { font: inherit; font-weight: 600; color: var(--accent-ink); background: var(--accent); border: 0; border-radius: 10px; padding: 10px 16px; cursor: pointer; }
+  footer { margin-top: 26px; color: var(--muted); font-size: 0.82rem; text-align: center; }
+  footer a { color: inherit; }
+  @media (max-width: 640px) {
+    .col-c, .col-p { display: none; }
+    h1 { font-size: 1.35rem; }
+    td, th button { padding-left: 10px; padding-right: 10px; }
+  }
+  @media (prefers-reduced-motion: reduce) { tr.fresh { animation: none; } .toast { transition: none; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div id="app" aria-live="polite"></div>
+  <footer>Hecho con <a href="https://github.com/alejox/ac-songlist" rel="noopener">AC Songlist</a>, plugin de OBS para pedidos de canciones.</footer>
+</div>
+<div class="toast" id="toast" role="status"></div>
+
+<script src="config.js"></script>
+<script>
+(function () {
+  'use strict';
+  var cfg = window.ACSL_CONFIG || {};
+  var app = document.getElementById('app');
+  var channel = (new URLSearchParams(location.search).get('canal') || '').toLowerCase().replace(/[^a-z0-9_]/g, '').slice(0, 25);
+
+  // --- utilidades -----------------------------------------------------------
+  function el(tag, attrs, children) {
+    var node = document.createElement(tag);
+    if (attrs) Object.keys(attrs).forEach(function (k) {
+      if (k === 'text') node.textContent = attrs[k];
+      else if (k === 'class') node.className = attrs[k];
+      else node.setAttribute(k, attrs[k]);
+    });
+    (children || []).forEach(function (c) { if (c) node.appendChild(typeof c === 'string' ? document.createTextNode(c) : c); });
+    return node;
+  }
+  function norm(s) { return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase(); }
+  var toastTimer;
+  function toast(msg) {
+    var t = document.getElementById('toast');
+    t.textContent = msg; t.classList.add('show');
+    clearTimeout(toastTimer); toastTimer = setTimeout(function () { t.classList.remove('show'); }, 2600);
+  }
+  function api(path) {
+    return fetch(cfg.url + '/rest/v1/' + path, { headers: { apikey: cfg.key, Authorization: 'Bearer ' + cfg.key }, cache: 'no-store' })
+      .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); });
+  }
+
+  // --- sin canal o sin configurar ------------------------------------------
+  if (!cfg.url || !cfg.key) {
+    app.appendChild(el('div', { class: 'card empty', text: 'Esta página todavía no está conectada a ningún servicio.' }));
+    return;
+  }
+  if (!channel) {
+    var input = el('input', { type: 'text', name: 'canal', placeholder: 'nombre_del_canal', autocomplete: 'off', 'aria-label': 'Canal de Twitch' });
+    var form = el('form', null, [input, el('button', { class: 'btn', type: 'submit', text: 'Ver lista' })]);
+    app.appendChild(el('div', { class: 'card landing' }, [
+      el('h1', { text: 'Lista de canciones' }),
+      el('p', { class: 'sub', text: 'Escribe el canal de Twitch para ver las canciones que se pueden pedir.' }),
+      form
+    ]));
+    return;
+  }
+
+  // --- estado ---------------------------------------------------------------
+  var state = { songs: null, title: '', version: -1, live: {}, query: '', category: '', sort: 'n', dir: 1, mode: 'off', fresh: {} };
+
+  var statusDot = el('span', { class: 'dot' });
+  var statusText = el('span', { text: 'Cargando…' });
+  var titleEl = el('h1', { text: channel });
+  var subEl = el('div', { class: 'sub', text: 'Lista de canciones' });
+  var nowEl = el('div');
+  var queueEl = el('div');
+  var howEl = el('div', { class: 'card how' });
+  var search = el('input', { type: 'search', placeholder: 'Buscar por título, artista o número…', 'aria-label': 'Buscar canciones' });
+  var countEl = el('span', { class: 'count' });
+  var chipsEl = el('div', { class: 'chips' });
+  var tableEl = el('div', { class: 'card table' });
+
+  app.appendChild(el('header', null, [el('div', null, [titleEl, subEl]), el('div', { class: 'status' }, [statusDot, statusText])]));
+  app.appendChild(nowEl); app.appendChild(queueEl); app.appendChild(howEl);
+  app.appendChild(el('div', { class: 'tools' }, [search, countEl]));
+  app.appendChild(chipsEl); app.appendChild(tableEl);
+
+  search.addEventListener('input', function () { state.query = search.value; renderTable(); });
+
+  function setMode(mode) {
+    state.mode = mode;
+    statusDot.className = 'dot ' + (mode === 'live' ? 'live' : mode === 'poll' ? 'poll' : mode === 'off' ? 'off' : '');
+    statusText.textContent = mode === 'live' ? 'En vivo' : mode === 'poll' ? 'Se actualiza cada pocos segundos' : mode === 'off' ? 'Sin conexión' : 'Cargando…';
+  }
+
+  // --- pintar ---------------------------------------------------------------
+  function people(by) { return (by || []).join(', '); }
+  function songText(it) { return it.a ? it.t + ' — ' + it.a : it.t; }
+
+  function renderLive() {
+    var live = state.live || {};
+    nowEl.textContent = ''; queueEl.textContent = '';
+    if (live.playing && live.playing.t) {
+      var meta = [live.playing.a, live.playing.by && live.playing.by.length ? 'pedida por ' + people(live.playing.by) : ''].filter(Boolean).join(' · ');
+      nowEl.appendChild(el('div', { class: 'card now' }, [el('div', null, [
+        el('div', { class: 'lbl', text: 'Sonando ahora' }),
+        el('div', { class: 'title', text: live.playing.t }),
+        meta ? el('div', { class: 'meta', text: meta }) : null
+      ])]));
+    }
+    var q = live.queue || [];
+    if (q.length) {
+      var total = live.total > q.length ? live.total : q.length;
+      var list = el('ol');
+      q.forEach(function (it) {
+        list.appendChild(el('li', null, [el('span', { class: 'song', text: songText(it) }), el('span', { class: 'by', text: people(it.by) })]));
+      });
+      var box = el('div', { class: 'card queue' }, [el('h2', { text: 'Cola de pedidos · ' + total }), list]);
+      if (total > q.length) box.appendChild(el('div', { class: 'sub', text: '+' + (total - q.length) + ' más' }));
+      queueEl.appendChild(box);
+    }
+    howEl.textContent = '';
+    howEl.appendChild(el('h2', { text: 'Cómo pedir' }));
+    if (live.open === false) {
+      howEl.appendChild(el('p', { class: 'closed', text: 'Los pedidos están cerrados ahora mismo.' }));
+    } else {
+      var p = el('p');
+      p.appendChild(document.createTextNode('En el chat de '));
+      p.appendChild(el('a', { href: 'https://www.twitch.tv/' + channel, rel: 'noopener', target: '_blank', text: 'twitch.tv/' + channel, style: 'color:var(--accent)' }));
+      p.appendChild(document.createTextNode(' escribe '));
+      p.appendChild(el('code', { text: '!sr' }));
+      p.appendChild(document.createTextNode(' y el número o el nombre. Toca una canción para copiar su comando.'));
+      howEl.appendChild(p);
+    }
+    if (state.songs) renderTable(); // las marcas "sonando" y "en cola" dependen de esto
+  }
+
+  function renderChips() {
+    var cats = {};
+    (state.songs || []).forEach(function (s) { (s.c || []).forEach(function (c) { cats[c] = (cats[c] || 0) + 1; }); });
+    var names = Object.keys(cats).sort(function (a, b) { return a.localeCompare(b, 'es'); });
+    chipsEl.textContent = '';
+    if (!names.length) { state.category = ''; return; }
+    if (state.category && !cats[state.category]) state.category = '';
+    [''].concat(names).forEach(function (name) {
+      var chip = el('button', { class: 'chip', type: 'button', 'aria-pressed': String(state.category === name), text: name ? name + ' · ' + cats[name] : 'Todas' });
+      chip.addEventListener('click', function () { state.category = name; renderChips(); renderTable(); });
+      chipsEl.appendChild(chip);
+    });
+  }
+
+  var columns = [
+    { key: 'n', label: 'Nº', cls: 'n' }, { key: 't', label: 'Título', cls: 't' }, { key: 'a', label: 'Artista', cls: 'a' },
+    { key: 'c', label: 'Categorías', cls: 'c col-c' }, { key: 'p', label: 'Veces', cls: 'p col-p' }
+  ];
+
+  function renderTable() {
+    var songs = state.songs || [];
+    var q = norm(state.query).trim();
+    var words = q.split(/\s+/).filter(Boolean);
+    var rows = songs.filter(function (s) {
+      if (state.category && (s.c || []).indexOf(state.category) < 0) return false;
+      if (!words.length) return true;
+      var hay = norm(s.t + ' ' + (s.a || '') + ' ' + (s.c || []).join(' ')) + ' ' + s.n;
+      return words.every(function (w) { return hay.indexOf(w) >= 0; });
+    });
+    var key = state.sort, dir = state.dir;
+    rows.sort(function (x, y) {
+      var a = x[key], b = y[key];
+      if (key === 'c') { a = (x.c || []).join(', '); b = (y.c || []).join(', '); }
+      var r = (key === 'n' || key === 'p') ? (a || 0) - (b || 0) : String(a || '').localeCompare(String(b || ''), 'es', { sensitivity: 'base' });
+      return (r || (x.n - y.n)) * dir;
+    });
+
+    countEl.textContent = rows.length === songs.length ? songs.length + ' canciones' : rows.length + ' de ' + songs.length;
+    tableEl.textContent = '';
+    if (!songs.length) { tableEl.appendChild(el('div', { class: 'empty', text: 'Este canal todavía no tiene canciones en su lista.' })); return; }
+    if (!rows.length) { tableEl.appendChild(el('div', { class: 'empty', text: 'Ninguna canción coincide con la búsqueda.' })); return; }
+
+    var live = state.live || {};
+    var playingN = live.playing && live.playing.n;
+    var queued = {};
+    (live.queue || []).forEach(function (it) { if (it.n) queued[it.n] = true; });
+
+    var head = el('tr');
+    columns.forEach(function (col) {
+      var th = el('th', { class: col.cls, scope: 'col' });
+      if (state.sort === col.key) th.setAttribute('aria-sort', state.dir > 0 ? 'ascending' : 'descending');
+      var b = el('button', { type: 'button', text: col.label });
+      b.addEventListener('click', function () {
+        if (state.sort === col.key) state.dir = -state.dir; else { state.sort = col.key; state.dir = col.key === 'p' ? -1 : 1; }
+        renderTable();
+      });
+      th.appendChild(b); head.appendChild(th);
+    });
+    var body = el('tbody');
+    rows.forEach(function (s) {
+      var titleCell = el('td', { class: 't', text: s.t });
+      if (playingN && playingN === s.n) titleCell.appendChild(el('span', { class: 'tag playing', text: 'SONANDO' }));
+      else if (queued[s.n]) titleCell.appendChild(el('span', { class: 'tag queued', text: 'EN COLA' }));
+      var tr = el('tr', { tabindex: '0', title: 'Copiar "!sr ' + s.n + '"' }, [
+        el('td', { class: 'n', text: String(s.n) }), titleCell, el('td', { class: 'a', text: s.a || '' }),
+        el('td', { class: 'c col-c', text: (s.c || []).join(', ') }), el('td', { class: 'p col-p', text: String(s.p || 0) })
+      ]);
+      if (state.fresh[s.n]) tr.classList.add('fresh');
+      function copy() {
+        var cmd = '!sr ' + s.n;
+        var done = function () { toast('Copiado: ' + cmd + ' — pégalo en el chat'); };
+        if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(cmd).then(done, function () { toast('Escribe en el chat: ' + cmd); });
+        else toast('Escribe en el chat: ' + cmd);
+      }
+      tr.addEventListener('click', copy);
+      tr.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); copy(); } });
+      body.appendChild(tr);
+    });
+    tableEl.appendChild(el('table', null, [el('thead', null, [head]), body]));
+  }
+
+  // --- datos ----------------------------------------------------------------
+  function applyCatalog(row) {
+    var before = {};
+    (state.songs || []).forEach(function (s) { before[s.n] = true; });
+    var hadSongs = state.songs !== null;
+    state.songs = Array.isArray(row.songs) ? row.songs : [];
+    state.version = row.songs_version;
+    state.title = row.title || channel;
+    state.fresh = {};
+    if (hadSongs) state.songs.forEach(function (s) { if (!before[s.n]) state.fresh[s.n] = true; }); // las nuevas se resaltan
+    titleEl.textContent = state.title;
+    subEl.textContent = 'Lista de canciones';
+    document.title = state.title + ' · Lista de canciones';
+    renderChips(); renderTable();
+    var added = Object.keys(state.fresh).length;
+    if (added) toast(added === 1 ? 'Se agregó una canción nueva' : 'Se agregaron ' + added + ' canciones');
+  }
+  function loadCatalog() {
+    return api('catalogs?channel=eq.' + channel + '&select=title,songs,songs_version').then(function (rows) {
+      if (!rows.length) {
+        state.songs = null;
+        tableEl.textContent = '';
+        tableEl.appendChild(el('div', { class: 'empty', text: 'El canal «' + channel + '» todavía no ha publicado su lista de canciones.' }));
+        countEl.textContent = ''; chipsEl.textContent = '';
+        return false;
+      }
+      applyCatalog(rows[0]);
+      return true;
+    });
+  }
+  function loadLive() {
+    return api('catalog_live?channel=eq.' + channel + '&select=live').then(function (rows) {
+      state.live = rows.length ? (rows[0].live || {}) : {};
+      renderLive();
+    });
+  }
+  function checkVersion() {
+    return api('catalogs?channel=eq.' + channel + '&select=songs_version').then(function (rows) {
+      var v = rows.length ? rows[0].songs_version : -1;
+      if (v !== state.version) return loadCatalog();
+    });
+  }
+
+  // Respaldo: aunque el aviso en tiempo real falle, la página se pone al día sola.
+  var tick = 0;
+  function poll() {
+    tick++;
+    var slow = state.mode === 'live';
+    var jobs = [];
+    if (!slow || tick % 6 === 0) jobs.push(loadLive());
+    if ((!slow && tick % 3 === 0) || tick % 12 === 0) jobs.push(checkVersion());
+    if (!jobs.length) return;
+    Promise.all(jobs).then(function () { if (state.mode === 'off') setMode('poll'); }, function () { if (state.mode !== 'live') setMode('off'); });
+  }
+
+  function startRealtime() {
+    if (!cfg.realtime) return;
+    import(cfg.realtime).then(function (lib) {
+      var client = lib.createClient(cfg.url, cfg.key, { auth: { persistSession: false }, realtime: { params: { eventsPerSecond: 5 } } });
+      client.channel('acsl-' + channel)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'catalog_live', filter: 'channel=eq.' + channel }, function (p) {
+          if (p.new && p.new.live) { state.live = p.new.live; renderLive(); } else loadLive();
+        })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'catalogs', filter: 'channel=eq.' + channel }, function () {
+          loadCatalog().catch(function () {}); // el catálogo se vuelve a pedir: el aviso puede llegar recortado
+        })
+        .subscribe(function (status) {
+          if (status === 'SUBSCRIBED') { setMode('live'); loadLive().catch(function () {}); checkVersion().catch(function () {}); }
+          else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') { if (state.mode === 'live') setMode('poll'); }
+        });
+    }).catch(function () { /* sin tiempo real: sigue el respaldo por consulta */ });
+  }
+
+  Promise.all([loadCatalog(), loadLive()]).then(function () { setMode('poll'); startRealtime(); },
+                                               function () { setMode('off'); tableEl.appendChild(el('div', { class: 'empty', text: 'No se pudo cargar la lista. Reintentando…' })); });
+  setInterval(poll, 10000);
+  document.addEventListener('visibilitychange', function () { if (!document.hidden) { tick = 0; loadLive().catch(function () {}); checkVersion().catch(function () {}); } });
+})();
+</script>
+</body>
+</html>
