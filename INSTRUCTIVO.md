@@ -121,7 +121,21 @@ Pestaña **Ajustes → Reglas de los pedidos**:
 
 Si dos personas piden la misma canción, no se duplica: la segunda se suma al pedido y aparecen los dos nombres.
 
-## 7. Atajos de teclado
+## 7. Página web pública
+
+Si quieres que tu público vea la lista completa fuera del stream:
+
+1. Pestaña **Ajustes → Página web pública**.
+2. Marca **Publicar mi lista en la web** y pulsa **Guardar y conectar**.
+3. Copia el enlace con **Copiar enlace** y compártelo (en el panel del canal, en un comando del chat, en redes).
+
+La página tiene buscador y filtro por categoría, muestra la canción que suena y la cola, y **se actualiza sola**: cuando agregas una canción en OBS, aparece resaltada a los pocos segundos. Al tocar una canción se copia su comando (`!sr 12`).
+
+- Solo se publican las canciones activas; tus notas privadas no salen del equipo.
+- Para dejar de publicar, desmarca la opción y guarda: la lista se borra de la web.
+- La página queda ligada a este equipo por una clave que el plugin guarda con tus datos. Si cambias de ordenador, lleva también el archivo de datos (ver *Preguntas frecuentes*).
+
+## 8. Atajos de teclado
 
 En OBS: **Ajustes → Atajos**, busca «AC Songlist». Puedes asignar teclas a:
 
@@ -132,7 +146,7 @@ En OBS: **Ajustes → Atajos**, busca «AC Songlist». Puedes asignar teclas a:
 
 Útil para no soltar el instrumento: con un pedal o una tecla pasas a la siguiente.
 
-## 8. Historial
+## 9. Historial
 
 Pestaña **Historial**: qué tocaste, cuándo y quién lo pidió. La biblioteca guarda además cuántas veces tocaste cada canción (columna **Veces**) y la última fecha (pasa el ratón por encima).
 

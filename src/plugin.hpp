@@ -5,6 +5,7 @@
 #include "core/bot.hpp"
 #include "core/store.hpp"
 #include "overlay/overlay-source.hpp"
+#include "web/publisher.hpp"
 
 #include <QObject>
 #include <QTimer>
@@ -28,6 +29,7 @@ public:
 
 	Store *store() { return &m_store; }
 	TwitchChat *chat() { return &m_chat; }
+	Publisher *publisher() { return m_publisher.get(); }
 	QString dataPath() const { return m_path; }
 	void saveNow();
 
@@ -62,6 +64,7 @@ private:
 	Store m_store;
 	TwitchChat m_chat;
 	std::unique_ptr<Bot> m_bot;
+	std::unique_ptr<Publisher> m_publisher;
 	QString m_path;
 	QTimer m_saveTimer, m_animTimer, m_slowTimer;
 	std::vector<View> m_views;

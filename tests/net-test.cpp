@@ -3,6 +3,8 @@
 // que la conexion segura funciona de verdad en cada sistema. Solo lee; nunca escribe en un chat.
 #include "chat/chat-link.hpp"
 #include "chat/twitch-chat.hpp"
+#include "net/https.hpp"
+#include "web/web-config.hpp"
 
 #include <QCoreApplication>
 #include <QElapsedTimer>
@@ -181,6 +183,20 @@ static void probePlain()
 		    data.contains(" 001 ") ? "y Twitch SI acepta la sesion" : "pero Twitch NO responde a la sesion");
 }
 
+// HTTPS con la red del sistema, contra el servicio de la pagina web. Sin clave valida el
+// servicio contesta con un error, y eso basta: demuestra que la conexion segura funciona.
+static void testHttps()
+{
+	const QUrl url(QStringLiteral(ACSL_WEB_API_URL) + QStringLiteral("/rest/v1/rpc/publish_catalog"));
+	const QByteArray key = QByteArray(ACSL_WEB_API_KEY).isEmpty() ? QByteArray("sin-clave") : QByteArray(ACSL_WEB_API_KEY);
+	const HttpResult r = httpPostJson(url, {{"apikey", key}}, "{\"p_channel\":\"x\",\"p_key\":\"corta\"}");
+	report("HTTPS con la red del sistema", r.sent,
+	       r.sent ? "respuesta HTTP " + std::to_string(r.status) + " " + r.body.left(90).toStdString() : r.error.toStdString());
+	if (!QByteArray(ACSL_WEB_API_KEY).isEmpty())
+		// con la clave publica, una peticion mal formada debe ser rechazada por el servicio (400), no por falta de permiso
+		report("el servicio valida lo que recibe", r.status == 400, "HTTP " + std::to_string(r.status));
+}
+
 int main(int argc, char **argv)
 {
 	QCoreApplication app(argc, argv);
@@ -196,6 +212,8 @@ int main(int argc, char **argv)
 		qunsetenv("ACSL_NO_QT_TLS");
 	}
 	probePlain();
+	std::printf("HTTPS disponible: %s\n", httpsAvailable() ? "si" : "no");
+	testHttps();
 
 	std::printf("%s\n", g_failed ? "RESULTADO: hay fallos" : "RESULTADO: todo correcto");
 	return g_failed ? 1 : 0;

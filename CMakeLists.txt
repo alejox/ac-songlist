@@ -42,6 +42,9 @@ add_library(acsl-core STATIC
   src/chat/twitch-chat.hpp src/chat/twitch-chat.cpp
   src/chat/chat-link.hpp src/chat/chat-link.cpp
   src/chat/native-conn.hpp
+  src/net/https.hpp
+  src/web/web-config.hpp
+  src/web/publisher.hpp src/web/publisher.cpp
   src/overlay/renderer.hpp src/overlay/renderer.cpp)
 target_link_libraries(acsl-core PUBLIC Qt6::Core Qt6::Gui Qt6::Network)
 
@@ -49,14 +52,16 @@ target_link_libraries(acsl-core PUBLIC Qt6::Core Qt6::Gui Qt6::Network)
 find_package(Threads REQUIRED)
 target_link_libraries(acsl-core PUBLIC Threads::Threads)
 if(WIN32)
-  target_sources(acsl-core PRIVATE src/chat/native-conn-win.cpp)
+  target_sources(acsl-core PRIVATE src/chat/native-conn-win.cpp src/net/https-win.cpp)
   target_link_libraries(acsl-core PUBLIC winhttp)
 else()
   target_sources(acsl-core PRIVATE src/chat/native-conn-posix.cpp)
   if(APPLE)
-    target_sources(acsl-core PRIVATE src/chat/native-conn-mac.mm)
-    set_source_files_properties(src/chat/native-conn-mac.mm PROPERTIES COMPILE_FLAGS "-fobjc-arc" SKIP_AUTOMOC ON)
+    target_sources(acsl-core PRIVATE src/chat/native-conn-mac.mm src/net/https-mac.mm)
+    set_source_files_properties(src/chat/native-conn-mac.mm src/net/https-mac.mm PROPERTIES COMPILE_FLAGS "-fobjc-arc" SKIP_AUTOMOC ON)
     target_link_libraries(acsl-core PUBLIC "-framework Network" "-framework Foundation")
+  else()
+    target_sources(acsl-core PRIVATE src/net/https-qt.cpp)
   endif()
 endif()
 target_include_directories(acsl-core PUBLIC src)

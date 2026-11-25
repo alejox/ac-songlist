@@ -64,7 +64,7 @@
   .table { overflow: hidden; }
   table { width: 100%; border-collapse: collapse; }
   th { text-align: left; font-size: 0.72rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); padding: 0; border-bottom: 1px solid var(--line); }
-  th button { all: unset; display: block; width: 100%; box-sizing: border-box; padding: 10px 12px; cursor: pointer; }
+  th button { all: unset; display: block; width: 100%; box-sizing: border-box; padding: 10px 12px; cursor: pointer; white-space: nowrap; }
   th[aria-sort=ascending] button::after { content: " ▲"; }
   th[aria-sort=descending] button::after { content: " ▼"; }
   td { padding: 9px 12px; border-top: 1px solid var(--line); vertical-align: top; overflow-wrap: anywhere; }
@@ -379,7 +379,7 @@
 
   Promise.all([loadCatalog(), loadLive()]).then(function () { setMode('poll'); startRealtime(); },
                                                function () { setMode('off'); tableEl.appendChild(el('div', { class: 'empty', text: 'No se pudo cargar la lista. Reintentando…' })); });
-  setInterval(poll, 10000);
+  setInterval(poll, cfg.pollMs || 10000);
   document.addEventListener('visibilitychange', function () { if (!document.hidden) { tick = 0; loadLive().catch(function () {}); checkVersion().catch(function () {}); } });
 })();
 </script>

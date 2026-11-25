@@ -20,11 +20,12 @@ class QToolButton;
 namespace acsl {
 
 class TwitchChat;
+class Publisher;
 
 class Dock : public QWidget {
 	Q_OBJECT
 public:
-	Dock(Store *store, TwitchChat *chat, QWidget *parent = nullptr);
+	Dock(Store *store, TwitchChat *chat, Publisher *publisher, QWidget *parent = nullptr);
 
 private:
 	QWidget *buildQueueTab();
@@ -38,6 +39,7 @@ private:
 	void refreshSongs();
 	void refreshHistory();
 	void refreshChatStatus();
+	void refreshWebStatus();
 	void loadSettings();
 	void saveSettings();
 
@@ -51,6 +53,7 @@ private:
 
 	QPointer<Store> m_store;
 	QPointer<TwitchChat> m_chat;
+	QPointer<Publisher> m_publisher;
 	QTimer m_refreshTimer;
 
 	QLabel *m_chatStatus;
@@ -73,6 +76,9 @@ private:
 
 	QLineEdit *m_channel;
 	QCheckBox *m_offList;
+	QCheckBox *m_webEnabled = nullptr;
+	QLabel *m_webLink = nullptr, *m_webStatus = nullptr;
+	QPushButton *m_webCopy = nullptr;
 	QSpinBox *m_perUser, *m_maxQueue, *m_listSeconds;
 	QLabel *m_settingsSaved;
 };

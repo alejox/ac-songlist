@@ -23,6 +23,7 @@ Plugin nativo de OBS (C++/Qt) para streamers que tocan en directo. Sin servicios
   - *Lista de canciones*: la biblioteca numerada, por páginas. Puede estar siempre visible o aparecer solo cuando alguien escribe `!lista`.
 - **Skins retro** además del minimalista: casete (con carretes que giran), equipo de sonido (display de puntos con ecualizador y marquesina) y vinilo (disco girando). Sirven para la tarjeta, la cola y la lista.
 - **Estilo neutro y configurable** desde las propiedades de la fuente: tipografía, tamaño, colores de texto, acento y fondo, opacidad (0 = sin fondo), esquinas, márgenes, alineación, encabezado, filas y columnas.
+- **Página web pública** (opcional): tu lista en una página que puedes compartir, con buscador y filtro por categoría, que se actualiza sola cuando agregas canciones y muestra lo que suena y la cola.
 - **Chat de Twitch** sin iniciar sesión ni tokens: solo escribes el nombre de tu canal. La conexión va cifrada y es de solo lectura.
 - **Atajos de teclado** en *Ajustes → Atajos*: siguiente canción, terminar la actual, abrir/cerrar pedidos, mostrar la lista.
 
@@ -65,6 +66,18 @@ Después abre OBS y activa el panel en *Paneles → AC Songlist*.
 El plugin no escribe en el chat: el resultado de cada pedido se ve en el stream (en la cola y en la tarjeta).
 
 La búsqueda por nombre tolera acentos, mayúsculas, palabras sueltas y erratas pequeñas (`!sr sientist coldplay` encuentra *The Scientist*). Si dos personas piden la misma canción, la segunda se suma al pedido en vez de duplicarlo.
+
+### Página web pública
+
+En **Ajustes → Página web pública**, marca **Publicar mi lista en la web** y pulsa **Guardar y conectar**. Aparece el enlace de tu página (`…/?canal=tu_canal`) con un botón para copiarlo.
+
+- La página muestra el catálogo completo, la canción que suena y la cola, y se pone al día sola.
+- Al tocar una canción en la página se copia su comando (`!sr 12`) para pegarlo en el chat.
+- Solo se publican las canciones **activas**. Las notas privadas no salen del equipo.
+- La primera vez, el plugin genera una clave secreta que queda guardada en tu equipo: es la que demuestra que esa lista es tuya. Si reinstalas OBS en otro ordenador, copia también el archivo de datos (ver más abajo) o no podrás actualizar esa página.
+- Al desmarcar la opción y guardar, tu lista se borra de la web.
+
+El servicio y la página están en [`web/`](web/): un esquema de base de datos para Supabase ([`web/supabase/schema.sql`](web/supabase/schema.sql)) y una página estática que se publica con GitHub Pages.
 
 ### Importar canciones (CSV)
 
@@ -112,10 +125,11 @@ En Windows y macOS lo compila [el flujo de GitHub Actions](.github/workflows/bui
 | `src/chat/` | Cliente del chat de Twitch (IRC cifrado). En Windows y macOS usa la red del sistema (WinHTTP / Network.framework), porque el Qt que trae OBS ahí no incluye TLS. |
 | `src/overlay/` | Dibujado del overlay y la fuente de vídeo de OBS. |
 | `src/ui/` | Panel acoplable. |
+| `src/net/`, `src/web/` | Cliente HTTPS por sistema operativo y publicación del catálogo en la web. |
+| `web/` | Página web pública y esquema de la base de datos. |
 | `tests/` | Pruebas del núcleo (con un servidor de chat simulado), prueba de conexión real con Twitch y generador de imágenes de muestra. |
 
 ## Límites conocidos
 
 - Solo lee el chat de **Twitch** (no Kick ni YouTube), y no escribe en él.
-- No tiene página web pública de la lista: el público la ve en el stream con `!lista`.
 - Probado dentro de OBS 30 en Linux. Las versiones de Windows y macOS se compilan y pasan las pruebas del núcleo en GitHub Actions, pero no se han ejecutado dentro de OBS en esos sistemas antes de publicarlas aquí: si algo falla al cargarlo, el registro de OBS (*Ayuda → Archivos de registro*) lo dirá en las líneas `[ac-songlist]`.

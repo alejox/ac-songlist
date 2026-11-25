@@ -73,6 +73,8 @@ struct Settings {
 	QString channel;
 	QString botUser;
 	QString botToken;
+	bool webEnabled = false; // publicar la lista en la pagina web publica
+	QString webKey;          // clave secreta de este equipo para publicar (se genera sola)
 };
 
 enum class ReqStatus {

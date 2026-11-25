@@ -560,7 +560,8 @@ QJsonObject Store::toJson() const
 				   {"perUser", c.perUser},           {"allowOffList", c.allowOffList},
 				   {"replies", c.replies},           {"listSeconds", c.listSeconds},
 				   {"channel", c.channel},           {"botUser", c.botUser},
-				   {"botToken", c.botToken}};
+				   {"botToken", c.botToken},         {"webEnabled", c.webEnabled},
+				   {"webKey", c.webKey}};
 	QJsonObject root{{"version", 1},        {"songs", songs},
 			 {"queue", queue},      {"history", history},
 			 {"settings", settings}, {"nextSongId", m_nextSongId},
@@ -631,6 +632,8 @@ void Store::fromJson(const QJsonObject &root)
 	s.channel = c.value("channel").toString();
 	s.botUser = c.value("botUser").toString();
 	s.botToken = c.value("botToken").toString();
+	s.webEnabled = c.value("webEnabled").toBool(false);
+	s.webKey = c.value("webKey").toString();
 	m_settings = s;
 
 	m_nextSongId = qMax(root.value("nextSongId").toInt(1), maxSong + 1);

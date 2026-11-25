@@ -1,5 +1,6 @@
 #include "plugin.hpp"
 #include "plugin-support.hpp"
+#include "web/web-config.hpp"
 
 #include <QDateTime>
 #include <QDir>
@@ -91,6 +92,13 @@ Plugin::Plugin()
 	}
 	blog(LOG_INFO, "[ac-songlist] %d canciones cargadas", int(m_store.songs().size()));
 
+	// Pagina web publica: direccion del servicio (las variables de entorno son solo para pruebas).
+	m_publisher = std::make_unique<Publisher>(&m_store);
+	m_publisher->setEndpoint(qEnvironmentVariable("ACSL_WEB_API_URL", QStringLiteral(ACSL_WEB_API_URL)),
+				 qEnvironmentVariable("ACSL_WEB_API_KEY", QStringLiteral(ACSL_WEB_API_KEY)),
+				 qEnvironmentVariable("ACSL_WEB_PAGE_URL", QStringLiteral(ACSL_WEB_PAGE_URL)));
+	blog(LOG_INFO, "[ac-songlist] pagina web publica: %s", m_publisher->available() ? "disponible" : "no disponible en esta version");
+
 	m_startedAt = QDateTime::currentMSecsSinceEpoch();
 	m_bot = std::make_unique<Bot>(&m_store, [](const char *key) { return T(key); });
 
@@ -123,6 +131,7 @@ Plugin::Plugin()
 
 Plugin::~Plugin()
 {
+	m_publisher.reset();
 	m_chat.stop();
 	saveNow();
 }

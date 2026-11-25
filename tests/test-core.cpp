@@ -5,16 +5,20 @@
 #include "core/csv.hpp"
 #include "core/matcher.hpp"
 #include "core/store.hpp"
+#include "web/publisher.hpp"
 
 #include <QCoreApplication>
 #include <QElapsedTimer>
 #include <QFile>
 #include <QJsonArray>
+#include <QJsonDocument>
 #include <QJsonObject>
 #include <QTemporaryDir>
 #include <QThread>
 #include <cstdio>
 #include <functional>
+
+#include <mutex>
 
 #ifndef _WIN32
 #include <arpa/inet.h>
@@ -443,6 +447,170 @@ static void testIrc()
 	CHECK_EQ(TwitchChat::cleanToken("abc\r\nPRIVMSG"), QString());
 }
 
+// Espera (procesando eventos de Qt) a que se cumpla la condicion.
+static bool waitFor(const std::function<bool()> &condition, int ms = 4000)
+{
+	QElapsedTimer timer;
+	timer.start();
+	while (timer.elapsed() < ms) {
+		QCoreApplication::processEvents();
+		if (condition())
+			return true;
+		QThread::msleep(2);
+	}
+	QCoreApplication::processEvents();
+	return condition();
+}
+
+// Publicacion del catalogo en la web, con un servicio simulado en lugar de la red.
+static void testPublisher()
+{
+	Store s;
+	fill(s);
+	Song off = *s.song(8);
+	off.active = false;
+	s.updateSong(off);
+
+	std::mutex mutex;
+	QList<QJsonObject> requests;
+	QList<QByteArray> authHeaders;
+	QList<HttpResult> script; // respuestas preparadas; si se acaban, responde "ok"
+	auto reply = [](int status, const char *body) {
+		HttpResult r;
+		r.sent = status > 0;
+		r.status = status;
+		r.body = body;
+		return r;
+	};
+	auto count = [&]() {
+		std::lock_guard<std::mutex> lock(mutex);
+		return int(requests.size());
+	};
+	auto last = [&]() {
+		std::lock_guard<std::mutex> lock(mutex);
+		return requests.isEmpty() ? QJsonObject() : requests.last();
+	};
+
+	Publisher pub(&s);
+	pub.setDelays(20, 60);
+	pub.setTransport([&](const QUrl &url, const HttpHeaders &headers, const QByteArray &body) {
+		std::lock_guard<std::mutex> lock(mutex);
+		QJsonObject o = QJsonDocument::fromJson(body).object();
+		o.insert("_path", url.path());
+		requests.append(o);
+		for (const auto &h : headers)
+			if (h.first == "apikey")
+				authHeaders.append(h.second);
+		return script.isEmpty() ? reply(200, "{\"status\":\"ok\"}") : script.takeFirst();
+	});
+
+	// sin servicio configurado no hace nada
+	CHECK(!pub.available());
+	pub.setEndpoint("https://ejemplo.invalid/", "clave-publica", "https://pagina.invalid/lista/");
+	CHECK(!pub.active()); // falta que el usuario lo active
+	waitFor([]() { return false; }, 80);
+	CHECK_EQ(count(), 0);
+	CHECK(pub.state() == Publisher::State::Off);
+
+	// se activa: primer envio con catalogo completo y lo que suena
+	Settings c = s.settings();
+	c.channel = "micanal";
+	c.webEnabled = true;
+	c.webKey = Publisher::newKey();
+	CHECK_EQ(c.webKey.size(), 64);
+	CHECK(c.webKey != Publisher::newKey());
+	s.setSettings(c);
+	CHECK(pub.active());
+	CHECK_EQ(pub.pageUrl(), QString("https://pagina.invalid/lista/?canal=micanal"));
+	CHECK(waitFor([&]() { return pub.state() == Publisher::State::Published; }));
+	CHECK_EQ(count(), 1);
+	QJsonObject r = last();
+	CHECK_EQ(r["_path"].toString(), QString("/rest/v1/rpc/publish_catalog"));
+	CHECK_EQ(r["p_channel"].toString(), QString("micanal"));
+	CHECK_EQ(r["p_key"].toString(), c.webKey);
+	CHECK_EQ(r["p_songs"].toArray().size(), 9); // la desactivada no se publica
+	CHECK_EQ(r["p_songs"].toArray().at(0).toObject()["t"].toString(), QString("Dancing Queen"));
+	CHECK_EQ(r["p_songs"].toArray().at(0).toObject()["c"].toArray().at(0).toString(), QString("Pop"));
+	CHECK(r["p_live"].toObject()["open"].toBool());
+	CHECK_EQ(authHeaders.value(0), QByteArray("clave-publica"));
+
+	// un pedido: solo viaja lo que cambia (la cola), no el catalogo
+	s.request("ana", "3", "twitch");
+	CHECK(waitFor([&]() { return count() == 2; }));
+	r = last();
+	CHECK(!r.contains("p_songs"));
+	CHECK_EQ(r["p_live"].toObject()["queue"].toArray().at(0).toObject()["t"].toString(), QString("Take On Me"));
+	CHECK_EQ(r["p_live"].toObject()["queue"].toArray().at(0).toObject()["by"].toArray().at(0).toString(), QString("ana"));
+	CHECK_EQ(r["p_live"].toObject()["total"].toInt(), 1);
+
+	// empieza a sonar
+	s.next();
+	CHECK(waitFor([&]() { return count() == 3; }));
+	CHECK_EQ(last()["p_live"].toObject()["playing"].toObject()["n"].toInt(), 3);
+
+	// se agrega una cancion: ahora si viaja el catalogo
+	s.addSong("Bohemian Rhapsody", "Queen");
+	CHECK(waitFor([&]() { return count() == 4; }));
+	CHECK_EQ(last()["p_songs"].toArray().size(), 10);
+	waitFor([]() { return false; }, 120);
+	CHECK_EQ(count(), 4); // sin cambios no hay mas envios
+
+	// "demasiado seguido": reintenta solo
+	{
+		std::lock_guard<std::mutex> lock(mutex);
+		script << reply(200, "{\"status\":\"slow\"}");
+	}
+	s.setRequestsOpen(false);
+	CHECK(waitFor([&]() { return count() == 6; }, 5000));
+	CHECK(!last()["p_live"].toObject()["open"].toBool());
+	CHECK(pub.state() == Publisher::State::Published);
+
+	// sin conexion: error, y se recupera sin intervencion
+	{
+		std::lock_guard<std::mutex> lock(mutex);
+		HttpResult offline;
+		offline.error = "sin red";
+		script << offline;
+	}
+	s.setRequestsOpen(true);
+	CHECK(waitFor([&]() { return pub.state() == Publisher::State::Error; }));
+	CHECK_EQ(pub.message(), QString("offline"));
+	CHECK(waitFor([&]() { return pub.state() == Publisher::State::Published; }, 5000));
+	const int afterRecover = count();
+
+	// otro equipo ya publica ese canal: se detiene, no insiste
+	{
+		std::lock_guard<std::mutex> lock(mutex);
+		script << reply(403, "{\"message\":\"este canal ya lo publica otra instalacion\"}");
+	}
+	s.addSong("Otra mas", "Alguien");
+	CHECK(waitFor([&]() { return pub.state() == Publisher::State::Error; }));
+	CHECK_EQ(pub.message(), QString("taken"));
+	s.addSong("Y otra", "Alguien");
+	waitFor([]() { return false; }, 200);
+	CHECK_EQ(count(), afterRecover + 1);
+
+	// cambiar de canal lo desbloquea y vuelve a mandar todo
+	c = s.settings();
+	c.channel = "otrocanal";
+	s.setSettings(c);
+	CHECK(waitFor([&]() { return pub.state() == Publisher::State::Published; }));
+	CHECK_EQ(last()["p_channel"].toString(), QString("otrocanal"));
+	CHECK(last().contains("p_songs"));
+
+	// desactivar: deja de publicar y pide borrar la lista
+	const int before = count();
+	c.webEnabled = false;
+	s.setSettings(c);
+	pub.unpublish("otrocanal", c.webKey);
+	CHECK(waitFor([&]() { return count() == before + 1; }));
+	CHECK_EQ(last()["_path"].toString(), QString("/rest/v1/rpc/unpublish_catalog"));
+	CHECK(waitFor([&]() { return pub.state() == Publisher::State::Off; }));
+	s.addSong("No se publica", "Nadie");
+	waitFor([]() { return false; }, 150);
+	CHECK_EQ(count(), before + 1);
+}
+
 #ifndef _WIN32
 // ---------------------------------------------------------------------------
 // Servidor de chat simulado (se comporta como Twitch lo justo) para probar la
@@ -557,21 +725,6 @@ private:
 	QStringList m_received;
 	std::thread m_thread;
 };
-
-// Espera (procesando eventos de Qt) a que se cumpla la condicion.
-static bool waitFor(const std::function<bool()> &condition, int ms = 4000)
-{
-	QElapsedTimer timer;
-	timer.start();
-	while (timer.elapsed() < ms) {
-		QCoreApplication::processEvents();
-		if (condition())
-			return true;
-		QThread::msleep(2);
-	}
-	QCoreApplication::processEvents();
-	return condition();
-}
 
 static void testNativeLink()
 {
@@ -707,6 +860,7 @@ int main(int argc, char **argv)
 	testCsv();
 	testBot();
 	testIrc();
+	testPublisher();
 #ifndef _WIN32
 	testNativeLink();
 	testChatOverNativeLink();

@@ -4,14 +4,17 @@
 #include "../core/csv.hpp"
 #include "../core/matcher.hpp"
 #include "../plugin-support.hpp"
+#include "../web/publisher.hpp"
 
 #include <QCheckBox>
+#include <QClipboard>
 #include <QComboBox>
 #include <QFile>
 #include <QFileDialog>
 #include <QFormLayout>
 #include <QFrame>
 #include <QGroupBox>
+#include <QGuiApplication>
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QLabel>
@@ -27,6 +30,7 @@
 #include <QTableWidget>
 #include <QToolButton>
 #include <QVBoxLayout>
+#include <QWheelEvent>
 
 namespace acsl {
 
@@ -92,6 +96,16 @@ QString shortDate(const QDateTime &dt)
 	return QLocale().toString(dt.toLocalTime().date(), QLocale::ShortFormat);
 }
 
+// Casilla numerica que no reacciona a la rueda del raton: asi, al desplazar los ajustes,
+// no se cambia un valor por pasar el cursor por encima.
+class SpinBox : public QSpinBox {
+public:
+	using QSpinBox::QSpinBox;
+
+protected:
+	void wheelEvent(QWheelEvent *event) override { event->ignore(); }
+};
+
 QPushButton *button(const QString &text, const QString &tip, QWidget *parent)
 {
 	auto *b = new QPushButton(text, parent);
@@ -101,7 +115,8 @@ QPushButton *button(const QString &text, const QString &tip, QWidget *parent)
 
 } // namespace
 
-Dock::Dock(Store *store, TwitchChat *chat, QWidget *parent) : QWidget(parent), m_store(store), m_chat(chat)
+Dock::Dock(Store *store, TwitchChat *chat, Publisher *publisher, QWidget *parent)
+	: QWidget(parent), m_store(store), m_chat(chat), m_publisher(publisher)
 {
 	setMinimumWidth(320);
 
@@ -173,10 +188,15 @@ Dock::Dock(Store *store, TwitchChat *chat, QWidget *parent) : QWidget(parent), m
 	connect(&m_refreshTimer, &QTimer::timeout, this, &Dock::refresh);
 	connect(store, &Store::changed, &m_refreshTimer, qOverload<>(&QTimer::start));
 	connect(chat, &TwitchChat::stateChanged, this, &Dock::refreshChatStatus);
+	if (publisher) {
+		connect(publisher, &Publisher::stateChanged, this, &Dock::refreshWebStatus);
+		connect(store, &Store::settingsChanged, this, &Dock::refreshWebStatus);
+	}
 
 	loadSettings();
 	refresh();
 	refreshChatStatus();
+	refreshWebStatus();
 	// biblioteca vacia: lo primero es crearla
 	if (store->songs().isEmpty())
 		m_tabs->setCurrentIndex(1);
@@ -515,13 +535,13 @@ QWidget *Dock::buildSettingsTab()
 	m_channel = new QLineEdit(inner);
 	m_channel->setPlaceholderText(T("Settings.Channel.Hint"));
 
-	m_perUser = new QSpinBox(inner);
+	m_perUser = new SpinBox(inner);
 	m_perUser->setRange(0, 50);
 	m_perUser->setSpecialValueText(T("Settings.NoLimit"));
-	m_maxQueue = new QSpinBox(inner);
+	m_maxQueue = new SpinBox(inner);
 	m_maxQueue->setRange(0, 500);
 	m_maxQueue->setSpecialValueText(T("Settings.NoLimit"));
-	m_listSeconds = new QSpinBox(inner);
+	m_listSeconds = new SpinBox(inner);
 	m_listSeconds->setRange(5, 600);
 	m_listSeconds->setSuffix(QStringLiteral(" s"));
 	m_offList = new QCheckBox(T("Settings.OffList"), inner);
@@ -532,6 +552,37 @@ QWidget *Dock::buildSettingsTab()
 	rulesForm->addRow(T("Settings.MaxQueue"), m_maxQueue);
 	rulesForm->addRow(T("Settings.ListSeconds"), m_listSeconds);
 	rulesForm->addRow(m_offList);
+
+	// Pagina web publica (solo si esta version del plugin trae el servicio configurado)
+	QGroupBox *web = nullptr;
+	if (m_publisher && m_publisher->available()) {
+		web = new QGroupBox(T("Web.Title"), inner);
+		auto *webHelp = new QLabel(T("Web.Help"), web);
+		webHelp->setWordWrap(true);
+		webHelp->setEnabled(false);
+		m_webEnabled = new QCheckBox(T("Web.Enable"), web);
+		m_webLink = new QLabel(web);
+		m_webLink->setTextFormat(Qt::RichText);
+		m_webLink->setOpenExternalLinks(true);
+		m_webLink->setTextInteractionFlags(Qt::TextBrowserInteraction);
+		m_webLink->setWordWrap(true);
+		m_webCopy = button(T("Web.Copy"), T("Web.Copy.Tip"), web);
+		connect(m_webCopy, &QPushButton::clicked, this, [this]() {
+			if (m_publisher)
+				QGuiApplication::clipboard()->setText(m_publisher->pageUrl());
+		});
+		m_webStatus = new QLabel(web);
+		m_webStatus->setWordWrap(true);
+		m_webStatus->setTextFormat(Qt::PlainText);
+		auto *linkRow = new QHBoxLayout;
+		linkRow->addWidget(m_webLink, 1);
+		linkRow->addWidget(m_webCopy);
+		auto *webLayout = new QVBoxLayout(web);
+		webLayout->addWidget(webHelp);
+		webLayout->addWidget(m_webEnabled);
+		webLayout->addLayout(linkRow);
+		webLayout->addWidget(m_webStatus);
+	}
 
 	auto *save = button(T("Settings.Save"), T("Settings.Save.Tip"), inner);
 	m_settingsSaved = new QLabel(inner);
@@ -552,6 +603,8 @@ QWidget *Dock::buildSettingsTab()
 	layout->setContentsMargins(6, 8, 6, 6);
 	layout->addLayout(channelForm);
 	layout->addWidget(rules);
+	if (web)
+		layout->addWidget(web);
 	layout->addLayout(saveRow);
 	layout->addSpacing(8);
 	layout->addWidget(help);
@@ -574,6 +627,8 @@ void Dock::loadSettings()
 	m_maxQueue->setValue(c.maxQueue);
 	m_listSeconds->setValue(c.listSeconds);
 	m_offList->setChecked(c.allowOffList);
+	if (m_webEnabled)
+		m_webEnabled->setChecked(c.webEnabled);
 }
 
 void Dock::saveSettings()
@@ -591,6 +646,17 @@ void Dock::saveSettings()
 	c.maxQueue = m_maxQueue->value();
 	c.listSeconds = m_listSeconds->value();
 	c.allowOffList = m_offList->isChecked();
+	// Pagina web: al activarla se genera la clave de este equipo; al desactivarla (o cambiar de
+	// canal) se borra de la web la lista que habia publicada.
+	const Settings previous = m_store->settings();
+	if (m_webEnabled) {
+		c.webEnabled = m_webEnabled->isChecked();
+		if (c.webEnabled && c.webKey.size() < 32)
+			c.webKey = Publisher::newKey();
+	}
+	const bool wasPublishing = previous.webEnabled && !previous.channel.isEmpty() && !previous.webKey.isEmpty();
+	if (m_publisher && wasPublishing && (!c.webEnabled || c.channel != previous.channel))
+		m_publisher->unpublish(previous.channel, previous.webKey);
 	m_store->setSettings(c);
 	m_channel->setText(c.channel);
 	m_settingsSaved->setText(T("Settings.Saved"));
@@ -758,6 +824,45 @@ void Dock::refreshHistory()
 		m_history->setItem(i, 1, textItem(song));
 		m_history->setItem(i, 2, textItem(h.requesters.join(QStringLiteral(", "))));
 	}
+}
+
+void Dock::refreshWebStatus()
+{
+	if (!m_publisher || !m_webStatus || !m_store)
+		return;
+	const Settings &c = m_store->settings();
+	const QString url = m_publisher->pageUrl();
+	const bool on = c.webEnabled && !url.isEmpty();
+	m_webLink->setVisible(on);
+	m_webCopy->setVisible(on);
+	if (on)
+		m_webLink->setText(QStringLiteral("<a href=\"%1\">%2</a>").arg(url.toHtmlEscaped(), url.toHtmlEscaped()));
+
+	QString text;
+	if (!c.webEnabled) {
+		text = T("Web.Status.Off");
+	} else if (c.channel.isEmpty()) {
+		text = T("Web.Status.NoChannel");
+	} else {
+		switch (m_publisher->state()) {
+		case Publisher::State::Off:
+		case Publisher::State::Pending:
+			text = T("Web.Status.Pending");
+			break;
+		case Publisher::State::Published:
+			text = T("Web.Status.Published").arg(QLocale().toString(m_publisher->lastPublished().time(), QLocale::ShortFormat));
+			break;
+		case Publisher::State::Error:
+			if (m_publisher->message() == QLatin1String("taken"))
+				text = T("Web.Status.Taken").arg(c.channel);
+			else if (m_publisher->message() == QLatin1String("offline"))
+				text = T("Web.Status.Offline");
+			else
+				text = T("Web.Status.Error").arg(m_publisher->message());
+			break;
+		}
+	}
+	m_webStatus->setText(text);
 }
 
 void Dock::refreshChatStatus()
