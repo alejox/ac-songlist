@@ -41,7 +41,7 @@ void readSettings(OverlaySource *ctx, obs_data_t *settings)
 {
 	OverlayStyle s;
 	s.mode = OverlayStyle::Mode(qBound(0, int(obs_data_get_int(settings, "mode")), kModes - 1));
-	s.skin = OverlayStyle::Skin(qBound(0, int(obs_data_get_int(settings, "skin")), 3));
+	s.skin = OverlayStyle::Skin(qBound(0, int(obs_data_get_int(settings, "skin")), 4));
 	s.animate = obs_data_get_bool(settings, "animate");
 	s.showHowTo = obs_data_get_bool(settings, "show_howto");
 	s.showWeb = obs_data_get_bool(settings, "show_web");
@@ -81,6 +81,7 @@ void readSettings(OverlaySource *ctx, obs_data_t *settings)
 	s.rows = qBound(1, int(obs_data_get_int(settings, "rows")), 40);
 	s.columns = qBound(1, int(obs_data_get_int(settings, "columns")), 6);
 	s.barCenterPercent = qBound(20, int(obs_data_get_int(settings, "bar_center")), 60);
+	s.barStyle = OverlayStyle::BarStyle(qBound(0, int(obs_data_get_int(settings, "bar_style")), 1));
 
 	ctx->width = uint32_t(s.width);
 	ctx->height = uint32_t(s.height);
@@ -228,6 +229,7 @@ bool modeChanged(obs_properties_t *props, obs_property_t *, obs_data_t *settings
 	setVisible(props, "valign", !bar);
 	setVisible(props, "label", !bar);
 	setVisible(props, "bar_center", bar);
+	setVisible(props, "bar_style", bar);
 	setVisible(props, "bar_hint", bar);
 
 	// Si el tamano sigue siendo el inicial de otro modo, usa el de este.
@@ -254,6 +256,10 @@ obs_properties_t *sourceProperties(void *)
 	obs_property_list_add_int(mode, obs_module_text("Source.Mode.Bar"), OverlayStyle::Bar);
 	obs_property_set_modified_callback(mode, modeChanged);
 	obs_properties_add_text(props, "bar_hint", obs_module_text("Source.BarHint"), OBS_TEXT_INFO);
+	obs_property_t *barStyle = obs_properties_add_list(props, "bar_style", obs_module_text("Source.BarStyle"), OBS_COMBO_TYPE_LIST,
+							   OBS_COMBO_FORMAT_INT);
+	obs_property_list_add_int(barStyle, obs_module_text("Source.BarStyle.Glass"), OverlayStyle::BarGlass);
+	obs_property_list_add_int(barStyle, obs_module_text("Source.BarStyle.Card"), OverlayStyle::BarCard);
 
 	obs_property_t *skin = obs_properties_add_list(props, "skin", obs_module_text("Source.Skin"), OBS_COMBO_TYPE_LIST,
 						       OBS_COMBO_FORMAT_INT);
@@ -261,6 +267,7 @@ obs_properties_t *sourceProperties(void *)
 	obs_property_list_add_int(skin, obs_module_text("Source.Skin.Cassette"), OverlayStyle::Cassette);
 	obs_property_list_add_int(skin, obs_module_text("Source.Skin.Led"), OverlayStyle::Led);
 	obs_property_list_add_int(skin, obs_module_text("Source.Skin.Vinyl"), OverlayStyle::Vinyl);
+	obs_property_list_add_int(skin, obs_module_text("Source.Skin.Turntable"), OverlayStyle::Turntable);
 	obs_property_set_modified_callback(skin, modeChanged);
 	obs_properties_add_bool(props, "animate", obs_module_text("Source.Animate"));
 
@@ -342,6 +349,7 @@ void sourceDefaults(obs_data_t *settings)
 	obs_data_set_default_bool(settings, "list_on_demand", false);
 	obs_data_set_default_int(settings, "page_seconds", 8);
 	obs_data_set_default_int(settings, "bar_center", 34);
+	obs_data_set_default_int(settings, "bar_style", OverlayStyle::BarGlass);
 }
 
 } // namespace

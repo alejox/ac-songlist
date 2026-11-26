@@ -489,6 +489,14 @@ void Store::setRequestsOpen(bool open)
 	emit changed();
 }
 
+void Store::setLastSeenVersion(const QString &version)
+{
+	if (m_settings.lastSeenVersion == version)
+		return;
+	m_settings.lastSeenVersion = version;
+	emit changed(); // solo se guarda
+}
+
 bool Store::barSection(int section) const
 {
 	return section == 0 ? m_settings.barList : section == 1 ? m_settings.barNow : section == 2 ? m_settings.barQueue : false;
@@ -576,7 +584,7 @@ QJsonObject Store::toJson() const
 				   {"botToken", c.botToken},         {"webEnabled", c.webEnabled},
 				   {"webKey", c.webKey},             {"barList", c.barList},
 				   {"barNow", c.barNow},             {"barQueue", c.barQueue},
-				   {"autoUpdate", c.autoUpdate}};
+				   {"autoUpdate", c.autoUpdate},     {"lastSeenVersion", c.lastSeenVersion}};
 	QJsonObject root{{"version", 1},        {"songs", songs},
 			 {"queue", queue},      {"history", history},
 			 {"settings", settings}, {"nextSongId", m_nextSongId},
@@ -653,6 +661,7 @@ void Store::fromJson(const QJsonObject &root)
 	s.barNow = c.value("barNow").toBool(true);
 	s.barQueue = c.value("barQueue").toBool(true);
 	s.autoUpdate = c.value("autoUpdate").toBool(true);
+	s.lastSeenVersion = c.value("lastSeenVersion").toString();
 	m_settings = s;
 
 	m_nextSongId = qMax(root.value("nextSongId").toInt(1), maxSong + 1);

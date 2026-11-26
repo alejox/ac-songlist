@@ -246,6 +246,9 @@ void Plugin::setLabels(OverlayData &d) const
 	d.lblWeb = T("Overlay.Web");
 	d.lblSongs = T("Overlay.Songs");
 	d.lblLastSong = T("Overlay.LastSong");
+	d.lblNext = T("Overlay.Next");
+	d.lblTicker = T("Overlay.Ticker");
+	d.lblNothing = T("Overlay.Nothing");
 	// la direccion solo se ensena cuando la lista esta de verdad en la web
 	if (m_publisher && m_publisher->state() == Publisher::State::Published)
 		d.webUrl = m_publisher->pageLabel();
@@ -330,6 +333,125 @@ OverlayData Plugin::buildData(View &view, qint64 now, QString *identity)
 
 // Barra: los tres paneles comparten fuente pero cada uno tiene su propio fundido, para que
 // encender o apagar uno (o cambiar de cancion) no haga parpadear a los otros dos.
+// La que suena (o la ultima que sono): la barra y el tocadiscos la siguen mostrando al terminar.
+void Plugin::rememberLastSong(qint64 now)
+{
+	const QueueItem &playing = m_store.playing();
+	if (playing.valid()) {
+		m_lastSong = {playing.id, playing.title, playing.artist, playing.requesters()};
+		if (playing.id != m_playingId) {
+			m_playingId = playing.id;
+			m_playingSince = now;
+		}
+	} else {
+		m_playingId = 0;
+		if (m_lastSong.title.isEmpty() && !m_store.history().isEmpty()) {
+			// recien abierto OBS: la ultima que se toco segun el historial
+			const HistoryItem &h = m_store.history().first();
+			m_lastSong = {-h.id, h.title, h.artist, h.requesters};
+		}
+	}
+}
+
+double Plugin::elapsedSeconds(qint64 now) const
+{
+	return m_playingId && m_playingSince ? qMax<qint64>(0, now - m_playingSince) / 1000.0 : -1;
+}
+
+// Tocadiscos: al cambiar de cancion se ve el cambio de disco; al terminar se levanta el brazo
+// y se queda la ultima cancion.
+bool Plugin::updateTurntable(View &view, qint64 now, double dtMs)
+{
+	const OverlayStyle &s = view.style;
+	const QueueItem &playing = m_store.playing();
+	rememberLastSong(now);
+	const bool hasPlaying = playing.valid();
+	const bool last = !hasPlaying && !m_lastSong.title.isEmpty();
+	const QString identity = (hasPlaying || last) ? QString::number(m_lastSong.id) + QChar(0x1f) + m_lastSong.title + QChar(0x1f) +
+								  m_lastSong.artist
+						     : QString();
+	if (identity != view.ttIdentity && !identity.isEmpty()) {
+		view.ttFromNothing = view.ttIdentity.isEmpty();
+		view.ttOldTitle = view.ttTitle;
+		view.ttOldArtist = view.ttArtist;
+		view.ttOldRequesters = view.ttRequesters;
+		view.ttChangeStart = now;
+	}
+	view.ttIdentity = identity;
+	if (!identity.isEmpty()) {
+		view.ttTitle = m_lastSong.title;
+		view.ttArtist = m_lastSong.artist;
+		view.ttRequesters = m_lastSong.requesters;
+	}
+	double changeT = 1e9;
+	if (view.ttChangeStart) {
+		changeT = (now - view.ttChangeStart) / 1000.0 + (view.ttFromNothing ? 1.0 : 0.0); // sin disco previo: entra directamente
+		if (changeT >= kTurntableChange) {
+			view.ttChangeStart = 0;
+			changeT = 1e9;
+		}
+	}
+	// el brazo baja al empezar a sonar y se levanta al terminar
+	const double armTarget = hasPlaying ? 1.0 : 0.0;
+	const double armBefore = view.ttArm;
+	view.ttArm = armTarget > view.ttArm ? qMin(armTarget, view.ttArm + dtMs / 350.0) : qMax(armTarget, view.ttArm - dtMs / 350.0);
+	if (view.ttChangeStart && hasPlaying)
+		view.ttArm = 1.0; // durante el cambio el brazo lo mueve la propia animacion
+
+	OverlayData d;
+	setLabels(d);
+	d.hasPlaying = hasPlaying;
+	d.lastSong = last;
+	d.title = view.ttTitle;
+	d.artist = view.ttArtist;
+	d.requesters = view.ttRequesters;
+	d.elapsed = hasPlaying ? elapsedSeconds(now) : -1;
+	if (!m_store.queue().isEmpty()) {
+		d.nextTitle = m_store.queue().first().title;
+		d.nextArtist = m_store.queue().first().artist;
+	}
+	d.changeT = changeT;
+	d.changeFromNothing = view.ttFromNothing;
+	d.oldTitle = view.ttOldTitle;
+	d.oldArtist = view.ttOldArtist;
+	d.oldRequesters = view.ttOldRequesters;
+	d.arm = view.ttArm;
+
+	// aparece y desaparece con un fundido, como el resto
+	const bool visible = !identity.isEmpty() || !s.idleText.trimmed().isEmpty();
+	view.identity = visible ? QStringLiteral("tt") : QString();
+	bool animating = false;
+	if (visible && view.opacity < 1) {
+		view.opacity = qMin(1.0, view.opacity + dtMs / kFadeInMs);
+		animating = true;
+	} else if (!visible && view.opacity > 0) {
+		view.opacity = qMax(0.0, view.opacity - dtMs / kFadeOutMs);
+		animating = true;
+	}
+	const bool spinning = s.animate && hasPlaying && visible;
+	if (spinning)
+		view.discSeconds += dtMs / 1000.0;
+	animating = animating || spinning || changeT < kTurntableChange || view.ttArm != armBefore;
+	const qint64 frame = animating ? now / 66 : 0;
+
+	QString sig = QStringLiteral("tt") + QString::number(view.styleVersion) + QChar(0x1d) + QString::number(frame) + QChar(0x1d) +
+		      QString::number(int(view.opacity * 255)) + QChar(0x1d) + identity + QChar(0x1d) + d.requesters.join(QLatin1Char(',')) +
+		      QChar(0x1d) + QString::number(int(d.elapsed)) + QChar(0x1d) + d.nextTitle + QChar(0x1f) + d.nextArtist + QChar(0x1d) +
+		      QString::number(int(view.ttArm * 100));
+	if (sig == view.lastRender)
+		return animating;
+	view.lastRender = sig;
+	view.data = d;
+	const double eased = 1.0 - (1.0 - view.opacity) * (1.0 - view.opacity);
+	QImage image = renderOverlay(s, d, view.opacity <= 0 ? 0.0 : eased, view.discSeconds);
+	{
+		std::lock_guard<std::mutex> lock(view.shared->mutex);
+		view.shared->image = std::move(image);
+		view.shared->imageDirty = true;
+	}
+	return animating;
+}
+
 bool Plugin::updateBar(View &view, qint64 now, double dtMs)
 {
 	const OverlayStyle &s = view.style;
@@ -341,13 +463,8 @@ bool Plugin::updateBar(View &view, qint64 now, double dtMs)
 
 	const QueueItem &playing = m_store.playing();
 	target.hasPlaying = playing.valid();
-	if (target.hasPlaying) {
-		m_lastSong = {playing.id, playing.title, playing.artist, playing.requesters()};
-	} else if (m_lastSong.title.isEmpty() && !m_store.history().isEmpty()) {
-		// recien abierto OBS: la ultima que se toco segun el historial
-		const HistoryItem &h = m_store.history().first();
-		m_lastSong = {-h.id, h.title, h.artist, h.requesters};
-	}
+	rememberLastSong(now);
+	target.elapsed = target.hasPlaying ? elapsedSeconds(now) : -1;
 	// "sonando" no se va al terminar la cancion: el disco se para y se queda toda la
 	// informacion de la ultima hasta que empiece otra
 	target.lastSong = !target.hasPlaying && !m_lastSong.title.isEmpty();
@@ -381,6 +498,7 @@ bool Plugin::updateBar(View &view, qint64 now, double dtMs)
 		} else if (section == OverlayStyle::BarNow) {
 			d.hasPlaying = target.hasPlaying;
 			d.lastSong = target.lastSong;
+			d.elapsed = target.elapsed;
 			d.title = target.title;
 			d.artist = target.artist;
 			d.requesters = target.requesters;
@@ -427,7 +545,12 @@ bool Plugin::updateBar(View &view, qint64 now, double dtMs)
 		animating = true;
 		view.discSeconds += dtMs / 1000.0;
 	}
-	const qint64 frame = moving ? now / 66 : 0;
+	// la tarjeta pasa los pedidos de la cola como una cinta
+	const bool ticker = s.animate && s.barStyle == OverlayStyle::BarCard && !view.sectionIdentity[OverlayStyle::BarQueue].isEmpty();
+	if (ticker)
+		animating = true;
+	view.data.clock = double(now - m_startedAt) / 1000.0;
+	const qint64 frame = (moving || ticker) ? now / 66 : 0;
 
 	const OverlayData &d = view.data;
 	QString sig = QStringLiteral("bar") + QString::number(view.styleVersion) + QChar(0x1d) + QString::number(frame) + QChar(0x1d) +
@@ -435,7 +558,8 @@ bool Plugin::updateBar(View &view, qint64 now, double dtMs)
 		      (d.hasPlaying ? QLatin1Char('1') : QLatin1Char('0')) + (d.lastSong ? QLatin1Char('1') : QLatin1Char('0')) + QChar(0x1d) +
 		      QString::number(d.queueTotal) + QChar(0x1f) +
 		      QString::number(d.songsTotal) + QChar(0x1f) + QString::number(d.page) + QChar(0x1f) + QString::number(d.pages) +
-		      QChar(0x1f) + (d.requestsOpen ? QLatin1Char('1') : QLatin1Char('0')) + QChar(0x1f) + d.webUrl + QChar(0x1d);
+		      QChar(0x1f) + (d.requestsOpen ? QLatin1Char('1') : QLatin1Char('0')) + QChar(0x1f) + d.webUrl + QChar(0x1d) +
+		      QString::number(int(d.elapsed)) + QChar(0x1d);
 	for (int i = 0; i < 3; i++)
 		sig += view.sectionIdentity[i] + QChar(0x1f) + QString::number(int(view.sectionOpacity[i] * 255)) + QChar(0x1d);
 	for (const OverlayRow &r : d.queue)
@@ -475,6 +599,8 @@ bool Plugin::updateView(View &view, qint64 now, double dtMs)
 	}
 	if (view.style.mode == OverlayStyle::Bar)
 		return updateBar(view, now, dtMs);
+	if (view.style.mode == OverlayStyle::NowPlaying && view.style.skin == OverlayStyle::Turntable)
+		return updateTurntable(view, now, dtMs);
 
 	QString targetIdentity;
 	const OverlayData target = buildData(view, now, &targetIdentity);

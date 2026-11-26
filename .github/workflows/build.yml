@@ -53,7 +53,7 @@ jobs:
         run: |
           mkdir -p pkg/ac-songlist/bin/64bit pkg/ac-songlist/data
           cp build/ac-songlist.so pkg/ac-songlist/bin/64bit/
-          cp -r data/locale pkg/ac-songlist/data/
+          cp -r data/locale data/novedades.txt pkg/ac-songlist/data/
           cp installer/LEEME.txt pkg/
           tar -C pkg -czf AC-Songlist-Linux.tar.gz .
 
@@ -274,7 +274,7 @@ jobs:
           mkdir -p "$bundle/MacOS" "$bundle/Resources"
           cp build/ac-songlist.so "$bundle/MacOS/ac-songlist"
           strip -x "$bundle/MacOS/ac-songlist"
-          cp -R data/locale "$bundle/Resources/"
+          cp -R data/locale data/novedades.txt "$bundle/Resources/"
           cp installer/macos/Info.plist "$bundle/"
           codesign --force --sign - pkg/ac-songlist.plugin
           cp installer/macos/instalar.command installer/macos/LEEME-MAC.txt installer/LEEME.txt pkg/
@@ -314,6 +314,7 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
           path: dist
@@ -336,6 +337,9 @@ jobs:
 
           El plugin lee los pedidos del chat de Twitch por conexion cifrada y sin iniciar sesion; no escribe en el chat.
           NOTAS
+          # lo nuevo de esta version, el mismo texto que muestra el plugin al actualizarse
+          nuevo=$(awk -v v="${tag#v}" '/^## /{on=($2==v)} on && /^- /' data/novedades.txt)
+          if [ -n "$nuevo" ]; then { printf '## Novedades\n\n%s\n\n' "$nuevo"; cat notas.md; } > notas-completas.md && mv notas-completas.md notas.md; fi
           gh release create "$tag" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
             --title "AC Songlist ${tag#v}" --notes-file notas.md \
             dist/release-windows/AC-Songlist-Windows.zip dist/AC-Songlist-macOS/AC-Songlist-macOS.tar.gz dist/AC-Songlist-Linux/AC-Songlist-Linux.tar.gz

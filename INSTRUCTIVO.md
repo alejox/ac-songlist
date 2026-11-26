@@ -81,12 +81,28 @@ Puedes agregar la fuente **varias veces**, una por cada modo, y colocar cada una
 
 Cada parte se enciende o se apaga desde el panel AC Songlist, con las casillas **Barra: Sonando · Cola · Lista** (están debajo de «Sonando ahora»). Las que quedan encendidas se reparten todo el ancho; si apagas la cola, por ejemplo, la lista se pone al lado de «Sonando ahora».
 
+**Diseño de la barra.** En las propiedades de la fuente eliges entre **Cristal de borde a borde** (el de arriba) y **Tarjeta**: una tarjeta oscura con una línea de tu color de acento arriba, la portada de la canción con su disco, etiquetas con el tiempo que lleva sonando, el artista y quién la pidió, el siguiente pedido en grande con el resto de la cola pasando como una cinta, y una barra de progreso de las páginas de la lista. Con fondo blanco y texto oscuro queda en versión clara.
+
+![Barra inferior, diseño Tarjeta](docs/barra-tarjeta.png)
+
 En las propiedades de la fuente puedes cambiar el ancho y el alto (por defecto 1920 × 200; a más alto, más filas), el **ancho de «Sonando ahora»**, el color y la opacidad del cristal, el color de acento, las columnas de la lista y cada cuántos segundos cambia de página.
 
 - **Opacidad del fondo:** al 100 % la franja es sólida; si la bajas (98, 95…) empieza a verse lo que hay detrás.
-- **Letra más grande:** sube **Tamaño** en la tipografía de la fuente. Puede crecer hasta un 30 % del alto de la barra; si necesitas más, sube también el **Alto** (por ejemplo, 260). «Sonando ahora» no desaparece al terminar una canción: el disco se detiene y se queda toda su información (título, artista y quién la pidió) con el rótulo **Última canción**, hasta que empiece la siguiente.
+- **Letra más grande:** sube **Tamaño** en la tipografía de la fuente. Puede crecer hasta un 30 % del alto de la barra; si necesitas más, sube también el **Alto** (por ejemplo, 260).
+
+«Sonando ahora» no desaparece al terminar una canción: el disco se detiene y se queda toda su información (título, artista y quién la pidió) con el rótulo **Última canción**, hasta que empiece la siguiente.
 
 **Skins.** En las propiedades de la fuente, **Skin** permite elegir entre *Minimalista* y tres retro: *casete*, *equipo de sonido* y *vinilo*. Los retro tienen su propia paleta y solo toman tu **color de acento**; si no quieres movimiento, desmarca **Animar**.
+
+**Tocadiscos.** Para «Sonando ahora» hay además el skin **Tocadiscos (cambia el disco en cada canción)**: la funda con la portada, el vinilo asomando y el brazo sobre el disco, en una tarjeta con los colores de la portada. Muestra el título, el artista, quién la pidió, cuánto lleva sonando y cuál es la siguiente de la cola.
+
+- Al cambiar de canción se ve el cambio de disco: el brazo se levanta, el disco se guarda en la funda, la funda sale, entra la nueva, sale el disco y el brazo baja.
+- Al terminar la canción el brazo se levanta, el disco se detiene y se queda la información con el rótulo **Última canción**.
+- Las canciones no traen portada, así que el plugin dibuja una para cada una (siempre la misma para la misma canción).
+
+![Tocadiscos](docs/tocadiscos.png)
+
+![Cambio de disco](docs/tocadiscos-cambio.png)
 
 **Cambiar el aspecto** (skin minimalista, en las propiedades de cada fuente): tipografía y tamaño, color del texto, color de acento, color y opacidad del fondo (0 = sin fondo), esquinas redondeadas, alineación, filas y columnas, y qué datos mostrar.
 
@@ -175,6 +191,8 @@ En **Ajustes → Actualizaciones** ves qué versión tienes y cuándo se buscó 
 - Desmarcar **Actualizar automáticamente**. Entonces el plugin solo avisa («Hay una versión nueva») y tú decides cuándo pulsar **Actualizar**.
 
 Si aparece un aviso en rojo («No se pudo instalar…»), pulsa **Descargar** e instálala a mano como la primera vez. Pasa, por ejemplo, si en Windows ejecutaste `instalar.bat` como administrador.
+
+La primera vez que abres OBS con una versión nueva aparece una ventana con **lo nuevo de esa versión**. Sale una sola vez; para volver a verla: **Ajustes → Actualizaciones → Ver novedades**.
 
 ## 9. Atajos de teclado
 

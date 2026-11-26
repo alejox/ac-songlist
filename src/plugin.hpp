@@ -60,11 +60,22 @@ private:
 		double sectionOpacity[3] = {0, 0, 0};
 		OverlayCache cache; // capa quieta de la barra
 		double discSeconds = 0; // reloj del disco: solo avanza mientras suena algo
+		// tocadiscos: la cancion en el plato, la que se va y el cambio de disco
+		QString ttIdentity, ttTitle, ttArtist;
+		QStringList ttRequesters;
+		QString ttOldTitle, ttOldArtist;
+		QStringList ttOldRequesters;
+		qint64 ttChangeStart = 0; // 0 = sin cambio en curso
+		bool ttFromNothing = false;
+		double ttArm = 0; // 1 = brazo sobre el disco
 	};
 
 	void refresh();
 	bool updateView(View &view, qint64 now, double dtMs);
 	bool updateBar(View &view, qint64 now, double dtMs);
+	bool updateTurntable(View &view, qint64 now, double dtMs);
+	void rememberLastSong(qint64 now);
+	double elapsedSeconds(qint64 now) const;
 	OverlayData buildData(View &view, qint64 now, QString *identity);
 	void setLabels(OverlayData &d) const;
 	void fillSongList(View &view, qint64 now, bool enabled, OverlayData &d, QString *identity);
@@ -87,6 +98,8 @@ private:
 		QString title, artist;
 		QStringList requesters;
 	} m_lastSong;
+	int m_playingId = 0;          // para saber cuando empezo a sonar la actual
+	qint64 m_playingSince = 0;
 	qint64 m_listUntil = 0; // la lista "a pedido" se muestra hasta este momento
 	bool m_listRestart = false;
 };

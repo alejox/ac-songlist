@@ -49,6 +49,9 @@ static OverlayData sampleData()
 	d.lblWeb = "Lista completa: %1";
 	d.lblSongs = "Canciones";
 	d.lblLastSong = QStringLiteral("\u00daltima canci\u00f3n");
+	d.lblNext = "Siguiente: %1";
+	d.lblNothing = "Nada sonando";
+	d.lblTicker = "Pide con !sr n\u00famero o nombre  \u2022  Escribe !lista para ver las canciones";
 	return d;
 }
 
@@ -243,5 +246,71 @@ int main(int argc, char **argv)
 	while (lightData.queue.size() > ll.queueRows)
 		lightData.queue.removeLast();
 	saveOnScene(renderOverlay(barLight, lightData, 1.0, 0.9), dir + "/24-barra-clara-720.png");
+
+	// tocadiscos: quieto, momentos del cambio de disco y "ultima cancion"
+	OverlayStyle tt = np;
+	tt.skin = OverlayStyle::Turntable;
+	tt.width = 1100;
+	tt.height = 200;
+	OverlayData ttData = d;
+	ttData.elapsed = 75;
+	ttData.nextTitle = "Take On Me";
+	ttData.nextArtist = "A-HA";
+	saveOnBackdrop(renderOverlay(tt, ttData, 1.0, 0.3), dir + "/30-tocadiscos.png");
+	OverlayData change = ttData;
+	change.oldTitle = "Neon Lullaby";
+	change.oldArtist = "Parade of Ghosts";
+	change.oldRequesters = {"pianofan22"};
+	change.title = "Static Garden";
+	change.artist = "Moth Choir";
+	change.requesters = {"sofi_music"};
+	int frame = 0;
+	for (double ct : {0.0, 0.2, 0.45, 0.7, 0.9, 1.15, 1.45, 1.7, 1.9, 2.2, 2.7}) {
+		change.changeT = ct;
+		saveOnBackdrop(renderOverlay(tt, change, 1.0, 0.3 + ct), dir + QString("/31-cambio-%1.png").arg(frame++, 2, 10, QLatin1Char('0')));
+	}
+	// barra con el diseno tarjeta: seis colores de acento, uno con tema claro
+	{
+		OverlayStyle card;
+		card.mode = OverlayStyle::Bar;
+		card.barStyle = OverlayStyle::BarCard;
+		card.width = 1920;
+		card.height = 200;
+		card.columns = 2;
+		card.backgroundOpacity = 100;
+		const BarLayout cl = barLayout(card);
+		OverlayData cd = d;
+		cd.elapsed = 185;
+		cd.clock = 3.0;
+		while (cd.songs.size() > cl.listRows * cl.listColumns)
+			cd.songs.removeLast();
+		cd.pages = 12;
+		cd.page = 2;
+		const QColor accents[] = {QColor(244, 114, 82), QColor(139, 92, 246), QColor(163, 230, 53), QColor(129, 140, 248),
+					  QColor(56, 189, 248), QColor(45, 212, 191)};
+		for (int i = 0; i < 6; i++) {
+			OverlayStyle c = card;
+			c.accentColor = accents[i];
+			if (i == 1) { // claro
+				c.backgroundColor = QColor(255, 255, 255);
+				c.textColor = QColor(17, 19, 26);
+				c.mutedColor = QColor(17, 19, 26, 150);
+			}
+			saveOnScene(renderOverlay(c, cd, 1.0, 0.6 + i), dir + QString("/40-tarjeta-%1.png").arg(i));
+		}
+		OverlayData idle = cd; // sin nada sonando, cola vacia
+		idle.hasPlaying = false;
+		idle.lastSong = false;
+		idle.queue.clear();
+		idle.queueTotal = 0;
+		saveOnScene(renderOverlay(card, idle, 1.0, 0.0), dir + "/41-tarjeta-vacia.png");
+	}
+
+	OverlayData last = ttData; // termino la cancion: brazo arriba, se queda la informacion
+	last.hasPlaying = false;
+	last.lastSong = true;
+	last.arm = 0;
+	last.elapsed = -1;
+	saveOnBackdrop(renderOverlay(tt, last, 1.0, 0.3), dir + "/32-tocadiscos-ultima.png");
 	return 0;
 }

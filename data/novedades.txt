@@ -1,0 +1,17 @@
+# Novedades de cada version. El plugin las muestra al abrir OBS despues de actualizarse.
+# Formato: "## version" y debajo una linea por novedad empezando con "- ".
+
+## 1.8.0
+- Nuevo skin «Tocadiscos» para la fuente «Sonando ahora»: funda con portada, vinilo y brazo. En cada canción se ve cómo se cambia el disco: el brazo se levanta, el disco se guarda, entra la funda nueva y el brazo baja.
+- Cada canción tiene su propia portada, y la tarjeta toma sus colores.
+- Barra inferior con un diseño nuevo, «Tarjeta»: portada con su disco, el siguiente pedido en grande, el resto de la cola pasando como una cinta y una barra de progreso de las páginas de la lista. Se elige en las propiedades de la fuente, en «Diseño de la barra».
+- La tarjeta y el tocadiscos muestran cuánto lleva sonando la canción y cuál es la siguiente.
+- Esta ventana: después de cada actualización verás aquí lo nuevo. También está en Ajustes → Actualizaciones → «Ver novedades».
+
+## 1.7.2
+- Barra: al 100 % de opacidad el fondo es sólido; al bajarla empieza a transparentar.
+- Barra: letra más grande, y ahora el tamaño de la fuente sí cambia el texto.
+- Barra: la cola avisa cuántos pedidos más hay («+N más»).
+
+## 1.7.0
+- Actualizaciones automáticas: el plugin descarga e instala solo las versiones nuevas y se usan al reiniciar OBS.

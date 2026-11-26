@@ -6,6 +6,7 @@
 #include "core/matcher.hpp"
 #include "core/store.hpp"
 #include "web/publisher.hpp"
+#include "update/changelog.hpp"
 #include "update/updater.hpp"
 
 #include <QCryptographicHash>
@@ -578,6 +579,42 @@ static QByteArray releaseJson(const QString &tag, const QString &asset, const QS
 	const QJsonObject other{{"name", "otro-sistema.zip"}, {"browser_download_url", "https://x.invalid/otro"}, {"digest", "sha256:00"}};
 	return QJsonDocument(QJsonObject{{"tag_name", tag}, {"html_url", "https://github.invalid/v"}, {"assets", QJsonArray{other, a}}})
 		.toJson(QJsonDocument::Compact);
+}
+
+// Novedades: que ensenar despues de actualizar.
+static void testChangelog()
+{
+	const QString text = "# comentario\n## 1.8.0\n- uno\n- dos\n\n## v1.7.2\n- tres\n## 1.7.0\n- cuatro\n## 1.6.0\n## 2.0.0\n- futura\n";
+	const QList<ChangelogEntry> all = parseChangelog(text);
+	CHECK_EQ(all.size(), 5);
+	CHECK_EQ(all[0].version, QString("1.8.0"));
+	CHECK_EQ(all[0].items, QStringList({"uno", "dos"}));
+	CHECK_EQ(all[1].version, QString("1.7.2")); // la "v" se quita
+	CHECK(all[3].items.isEmpty());
+	// venia de la 1.7.0: se ensena lo de la 1.7.2 y la 1.8.0, la mas nueva primero
+	QList<ChangelogEntry> show = changesSince(all, "1.7.0", "1.8.0");
+	CHECK_EQ(show.size(), 2);
+	CHECK_EQ(show[0].version, QString("1.8.0"));
+	CHECK_EQ(show[1].version, QString("1.7.2"));
+	// nunca vio ninguna: solo la actual
+	show = changesSince(all, "", "1.8.0");
+	CHECK_EQ(show.size(), 1);
+	CHECK_EQ(show[0].version, QString("1.8.0"));
+	// ya la habia visto: nada
+	CHECK(changesSince(all, "1.8.0", "1.8.0").isEmpty());
+	// versiones posteriores a la instalada y versiones vacias nunca se ensenan
+	show = changesSince(all, "0", "1.8.0");
+	CHECK_EQ(show.size(), 3);
+	CHECK_EQ(changesSince(all, "0", "1.8.0", 2).size(), 2);
+	for (const ChangelogEntry &e : show)
+		CHECK(e.version != "2.0.0" && e.version != "1.6.0");
+	// el archivo que viaja con el plugin se lee bien y tiene la version actual
+	QFile file(QString(ACSL_SOURCE_DIR) + "/data/novedades.txt");
+	CHECK(file.open(QIODevice::ReadOnly));
+	const QList<ChangelogEntry> real = parseChangelog(QString::fromUtf8(file.readAll()));
+	CHECK(!real.isEmpty());
+	CHECK_EQ(real.first().version, QString(ACSL_VERSION));
+	CHECK(!real.first().items.isEmpty());
 }
 
 static void testUpdater()
@@ -1216,6 +1253,7 @@ int main(int argc, char **argv)
 	testIrc();
 	testPublisher();
 	testUpdater();
+	testChangelog();
 #ifndef _WIN32
 	testNativeLink();
 	testChatOverNativeLink();

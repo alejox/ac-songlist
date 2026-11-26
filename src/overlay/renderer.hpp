@@ -17,10 +17,16 @@ struct OverlayStyle {
 	enum Align { Left = 0, Center = 1, Right = 2 };
 	enum VAlign { Top = 0, Middle = 1, Bottom = 2 };
 	// Aspecto. Los retro traen su propia paleta; de los colores elegidos solo usan el de acento.
-	enum Skin { Minimal = 0, Cassette = 1, Led = 2, Vinyl = 3 };
+	// Tocadiscos: funda con su portada, vinilo y brazo; los colores salen de la portada y al
+	// cambiar de cancion se ve como se cambia el disco.
+	enum Skin { Minimal = 0, Cassette = 1, Led = 2, Vinyl = 3, Turntable = 4 };
+	// Barra: cristal de borde a borde, o tarjeta oscura con linea de acento, portada, cinta
+	// con la cola y barra de progreso de paginas.
+	enum BarStyle { BarGlass = 0, BarCard = 1 };
 
 	Mode mode = NowPlaying;
 	Skin skin = Minimal;
+	BarStyle barStyle = BarGlass;
 	bool animate = true; // carretes, disco y ecualizador en movimiento (skins retro y barra)
 	int width = 900;
 	int height = 180;
@@ -80,6 +86,17 @@ struct OverlayData {
 	int songsTotal = 0;
 
 	bool requestsOpen = true;
+	double elapsed = -1;      // segundos que lleva sonando la cancion (-1 = no se sabe)
+	double clock = 0;         // reloj continuo, en segundos (la cinta de la cola de la tarjeta)
+	QString nextTitle, nextArtist; // la siguiente de la cola (vacio = no hay)
+
+	// Tocadiscos: cambio de disco. changeT son los segundos desde que empezo el cambio
+	// (grande = no hay cambio en curso); old* es la cancion que se va.
+	double changeT = 1e9;
+	bool changeFromNothing = false; // no habia disco: solo se ve entrar el nuevo
+	QString oldTitle, oldArtist;
+	QStringList oldRequesters;
+	double arm = 1.0; // brazo del tocadiscos: 1 = sobre el disco, 0 = levantado
 	QString webUrl; // direccion de la pagina publica, sin "https://"; vacio = no publicada
 
 	// barra, por parte (lista, sonando, cola): si ocupa sitio y con que opacidad se ve
@@ -89,7 +106,7 @@ struct OverlayData {
 
 	// textos ya traducidos
 	QString lblNowPlaying, lblQueue, lblSongList, lblRequestedBy, lblHowTo, lblMore, lblClosed, lblEmptyQueue,
-		lblEmptyList, lblWeb, lblSongs, lblLastSong;
+		lblEmptyList, lblWeb, lblSongs, lblLastSong, lblNext, lblTicker, lblNothing;
 };
 
 // Lo que no cambia de un fotograma al siguiente (paneles y texto de la barra) se guarda aqui
@@ -114,9 +131,18 @@ QImage renderOverlay(const OverlayStyle &style, const OverlayData &data, double 
 inline bool isAnimated(const OverlayStyle &s)
 {
 	if (s.mode == OverlayStyle::Bar)
-		return s.animate; // el disco del panel central
+		return s.animate; // el disco y, en la tarjeta, la cinta de la cola
 	return s.animate && s.skin != OverlayStyle::Minimal && s.mode == OverlayStyle::NowPlaying;
 }
+
+// Duracion del cambio de disco del tocadiscos, en segundos.
+constexpr double kTurntableChange = 2.7;
+
+// Portada inventada para una cancion (no hay portadas de verdad): siempre la misma para el mismo
+// titulo y artista. dark/light son los colores de la tarjeta y del texto de acento.
+QImage coverArt(const QString &title, const QString &artist, int size);
+QColor coverDark(const QString &title, const QString &artist);
+QColor coverLight(const QString &title, const QString &artist);
 
 // Barra: cuantas filas caben en cada panel con ese tamano y esa letra.
 struct BarLayout {

@@ -4,12 +4,15 @@
 #include "../core/csv.hpp"
 #include "../core/matcher.hpp"
 #include "../plugin-support.hpp"
+#include "../update/changelog.hpp"
 #include "../update/updater.hpp"
 #include "../web/publisher.hpp"
 
 #include <QCheckBox>
 #include <QClipboard>
 #include <QComboBox>
+#include <QDialog>
+#include <QDialogButtonBox>
 #include <QDesktopServices>
 #include <QFile>
 #include <QFileDialog>
@@ -675,8 +678,11 @@ QWidget *Dock::buildSettingsTab()
 			if (m_updater)
 				m_updater->check();
 		});
+		m_whatsNew = button(T("WhatsNew.Button"), T("WhatsNew.Button.Tip"), updates);
+		connect(m_whatsNew, &QPushButton::clicked, this, [this]() { showWhatsNew(false); });
 		auto *checkRow = new QHBoxLayout;
 		checkRow->addWidget(m_updateStatus, 1);
+		checkRow->addWidget(m_whatsNew);
 		checkRow->addWidget(m_updateCheck);
 		auto *updatesLayout = new QVBoxLayout(updates);
 		updatesLayout->addWidget(m_autoUpdate);
@@ -1047,6 +1053,70 @@ void Dock::refreshWebStatus()
 	m_webTopLabel->setToolTip(on ? text + QStringLiteral("\n") + url : T("Web.Top.Publish.Tip"));
 	m_webTopButton->setText(m_webCopied ? T("Web.Copied") : on ? T("Web.Copy") : T("Web.Top.Publish"));
 	m_webTopButton->setToolTip(on ? T("Web.Copy.Tip") : T("Web.Top.Publish.Tip"));
+}
+
+void Dock::showWhatsNew(bool onlyIfNew)
+{
+	if (!m_store)
+		return;
+	const QString current = QStringLiteral(ACSL_VERSION);
+	const QString lastSeen = m_store->settings().lastSeenVersion;
+	if (onlyIfNew && lastSeen == current)
+		return;
+	QString text;
+	if (char *path = obs_module_file("novedades.txt")) {
+		QFile file(QString::fromUtf8(path));
+		if (file.open(QIODevice::ReadOnly))
+			text = QString::fromUtf8(file.readAll());
+		bfree(path);
+	}
+	// automatica: lo nuevo desde la ultima que se vio; con el boton: las ultimas versiones
+	const QList<ChangelogEntry> entries = changesSince(parseChangelog(text), onlyIfNew ? lastSeen : QStringLiteral("0"), current, 3);
+	m_store->setLastSeenVersion(current);
+	if (entries.isEmpty())
+		return;
+
+	QString html;
+	for (const ChangelogEntry &e : entries) {
+		html += QStringLiteral("<h3 style=\"margin-bottom:4px\">%1</h3><ul style=\"margin-top:0\">").arg(T("WhatsNew.Version").arg(e.version).toHtmlEscaped());
+		for (const QString &item : e.items)
+			html += QStringLiteral("<li style=\"margin-bottom:6px\">%1</li>").arg(item.toHtmlEscaped());
+		html += QStringLiteral("</ul>");
+	}
+	auto *dialog = new QDialog(window());
+	dialog->setAttribute(Qt::WA_DeleteOnClose);
+	dialog->setModal(true);
+	dialog->setWindowTitle(T("WhatsNew.Title").arg(current));
+	dialog->resize(560, 460);
+	auto *heading = new QLabel(QStringLiteral("<b style=\"font-size:15pt\">%1</b><br>%2")
+					   .arg(T("WhatsNew.Heading").arg(current).toHtmlEscaped(), T("WhatsNew.Intro").toHtmlEscaped()),
+				   dialog);
+	heading->setTextFormat(Qt::RichText);
+	heading->setWordWrap(true);
+	auto *body = new QLabel(html, dialog);
+	body->setTextFormat(Qt::RichText);
+	body->setWordWrap(true);
+	body->setAlignment(Qt::AlignTop | Qt::AlignLeft);
+	auto *scroll = new QScrollArea(dialog);
+	scroll->setWidgetResizable(true);
+	scroll->setFrameShape(QFrame::NoFrame);
+	scroll->setWidget(body);
+	auto *buttons = new QDialogButtonBox(dialog);
+	QPushButton *github = buttons->addButton(T("WhatsNew.GitHub"), QDialogButtonBox::HelpRole);
+	QPushButton *ok = buttons->addButton(T("WhatsNew.Ok"), QDialogButtonBox::AcceptRole);
+	ok->setDefault(true);
+	connect(github, &QPushButton::clicked, dialog, [current]() {
+		QDesktopServices::openUrl(QUrl(QStringLiteral("https://github.com/alejox/ac-songlist/releases/tag/v") + current));
+	});
+	connect(buttons, &QDialogButtonBox::accepted, dialog, &QDialog::accept);
+	auto *layout = new QVBoxLayout(dialog);
+	layout->addWidget(heading);
+	layout->addWidget(scroll, 1);
+	layout->addWidget(buttons);
+	dialog->show();
+	dialog->raise();
+	dialog->activateWindow();
+	blog(LOG_INFO, "[ac-songlist] novedades de la version %s mostradas", ACSL_VERSION);
 }
 
 void Dock::refreshUpdate()

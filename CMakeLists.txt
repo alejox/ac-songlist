@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.22)
 
-project(ac-songlist VERSION 1.7.2 LANGUAGES CXX)
+project(ac-songlist VERSION 1.8.0 LANGUAGES CXX)
 if(APPLE)
   enable_language(OBJCXX)
 endif()
@@ -46,6 +46,7 @@ add_library(acsl-core STATIC
   src/web/web-config.hpp
   src/web/publisher.hpp src/web/publisher.cpp
   src/update/updater.hpp src/update/updater.cpp
+  src/update/changelog.hpp src/update/changelog.cpp
   src/overlay/renderer.hpp src/overlay/renderer.cpp)
 target_link_libraries(acsl-core PUBLIC Qt6::Core Qt6::Gui Qt6::Network)
 
@@ -123,6 +124,7 @@ if(ACSL_BUILD_TESTS)
   enable_testing()
   add_executable(acsl-tests tests/test-core.cpp)
   target_link_libraries(acsl-tests PRIVATE acsl-core)
+  target_compile_definitions(acsl-tests PRIVATE ACSL_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
   add_test(NAME core COMMAND acsl-tests)
   set_tests_properties(core PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 

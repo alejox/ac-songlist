@@ -23,8 +23,9 @@ Plugin nativo de OBS (C++/Qt) para streamers que tocan en directo. Sin servicios
   - *Lista de canciones*: la biblioteca numerada, por páginas. Puede estar siempre visible o aparecer solo cuando alguien escribe `!lista`.
   - *Barra inferior*: los tres anteriores juntos en una sola fuente (ver más abajo).
 - **Skins retro** además del minimalista: casete (con carretes que giran), equipo de sonido (display de puntos con ecualizador y marquesina) y vinilo (disco girando). Sirven para la tarjeta, la cola y la lista.
+- **Tocadiscos** para «Sonando ahora»: funda con portada, vinilo y brazo, con los colores de la portada. En cada canción se ve el cambio de disco: el brazo se levanta, el disco se guarda, la funda sale, entra la nueva y el brazo baja. Las canciones no traen portada, así que el plugin genera una para cada una (siempre la misma).
 - **Estilo neutro y configurable** desde las propiedades de la fuente: tipografía, tamaño, colores de texto, acento y fondo, opacidad (0 = sin fondo), esquinas, márgenes, alineación, encabezado, filas y columnas.
-- **Barra inferior**: una sola franja de cristal de borde a borde con «Sonando ahora» (con un disco que gira mientras suena y se detiene al terminar, dejando la información de la última canción), la cola de pedidos y la lista de canciones. Cada parte se enciende y se apaga con una casilla del panel, sin crear más fuentes.
+- **Barra inferior**: una sola franja de cristal de borde a borde con «Sonando ahora» (con un disco que gira mientras suena y se detiene al terminar, dejando la información de la última canción), la cola de pedidos y la lista de canciones. Cada parte se enciende y se apaga con una casilla del panel, sin crear más fuentes. Tiene dos diseños: *Cristal* y *Tarjeta* (portada con su disco y etiquetas, el siguiente pedido en grande con la cola pasando como una cinta, y progreso de páginas).
 - **Página web pública** (opcional): tu lista en una página que puedes compartir, con buscador y filtro por categoría, que se actualiza sola cuando agregas canciones y muestra lo que suena y la cola.
 - **Chat de Twitch** sin iniciar sesión ni tokens: solo escribes el nombre de tu canal. La conexión va cifrada y es de solo lectura.
 - **Atajos de teclado** en *Ajustes → Atajos*: siguiente canción, terminar la actual, abrir/cerrar pedidos, mostrar la lista y encender/apagar cada panel de la barra.
@@ -34,6 +35,12 @@ Plugin nativo de OBS (C++/Qt) para streamers que tocan en directo. Sin servicios
 ![Skins retro](docs/skins.png)
 
 ![Barra inferior](docs/barra.png)
+
+![Barra inferior, diseño Tarjeta](docs/barra-tarjeta.png)
+
+![Tocadiscos](docs/tocadiscos.png)
+
+![Cambio de disco](docs/tocadiscos-cambio.png)
 
 ## Instalación
 
@@ -56,6 +63,8 @@ Solo hace falta instalarlo a mano la primera vez. Desde la **1.7.0** el plugin s
 3. Como OBS tiene el plugin abierto, la versión nueva se usa **la próxima vez que abras OBS**. El panel lo avisa: «Versión X instalada. Reinicia OBS para usarla».
 
 En *Ajustes → Actualizaciones* puedes desmarcar **Actualizar automáticamente**: entonces solo avisa y tú pulsas **Actualizar**. Si el plugin está instalado fuera de la carpeta de plugins de OBS, o Windows no le deja escribir en ella (por ejemplo, si `instalar.bat` se ejecutó como administrador), avisa de la versión nueva con un botón **Descargar**.
+
+Después de cada actualización, al abrir OBS aparece una ventana con **lo nuevo de la versión** (sale una sola vez; se puede volver a ver en *Ajustes → Actualizaciones → Ver novedades*). El texto sale de [`data/novedades.txt`](data/novedades.txt), que también se usa en la página de cada versión en GitHub.
 
 Cómo cambia los archivos sin romper nada: en Windows un `.dll` en uso no se puede sobrescribir pero sí renombrar, así que cada archivo viejo se aparta con otro nombre y el nuevo ocupa su lugar. En macOS y Linux se cambia la carpeta entera de una vez y la vieja se aparta fuera de la carpeta de plugins, para que OBS no la cargue como un segundo plugin. Si algo falla a mitad, se deshace. Lo apartado se borra en el siguiente arranque.
 

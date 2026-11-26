@@ -28,6 +28,9 @@ class Dock : public QWidget {
 public:
 	Dock(Store *store, TwitchChat *chat, Publisher *publisher, Updater *updater, QWidget *parent = nullptr);
 
+	// Ventana con lo nuevo de la version. onlyIfNew: solo si aun no se mostro para esta version.
+	void showWhatsNew(bool onlyIfNew);
+
 private:
 	QWidget *buildQueueTab();
 	QWidget *buildSongsTab();
@@ -97,6 +100,7 @@ private:
 	QCheckBox *m_autoUpdate = nullptr;
 	QLabel *m_updateStatus = nullptr;
 	QPushButton *m_updateCheck = nullptr;
+	QPushButton *m_whatsNew = nullptr;
 	QSpinBox *m_perUser, *m_maxQueue, *m_listSeconds;
 	QLabel *m_settingsSaved;
 };

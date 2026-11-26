@@ -6,6 +6,8 @@
 #include "ui/dock.hpp"
 
 #include <obs-frontend-api.h>
+#include <QPointer>
+#include <QTimer>
 #include <obs-module.h>
 
 OBS_DECLARE_MODULE()
@@ -47,6 +49,7 @@ Hotkey g_hotkeys[] = {
 };
 
 bool g_dockAdded = false;
+QPointer<acsl::Dock> g_dock;
 
 void hotkeyPressed(void *data, obs_hotkey_id, obs_hotkey_t *, bool pressed)
 {
@@ -63,8 +66,10 @@ void addDock()
 	if (g_dockAdded || !plugin || !mainWindow)
 		return;
 	auto *dock = new acsl::Dock(plugin->store(), plugin->chat(), plugin->publisher(), plugin->updater(), mainWindow);
-	if (obs_frontend_add_dock_by_id("ac-songlist-dock", obs_module_text("Dock.Title"), dock))
+	if (obs_frontend_add_dock_by_id("ac-songlist-dock", obs_module_text("Dock.Title"), dock)) {
 		g_dockAdded = true;
+		g_dock = dock;
+	}
 	else
 		delete dock;
 }
@@ -93,6 +98,12 @@ void onFrontendEvent(enum obs_frontend_event event, void *)
 {
 	if (event == OBS_FRONTEND_EVENT_FINISHED_LOADING) {
 		addDock(); // por si la ventana aun no existia al cargar el modulo
+		// despues de actualizarse, lo nuevo de esta version (con OBS ya en pantalla)
+		if (g_dock)
+			QTimer::singleShot(1500, g_dock.data(), []() {
+				if (g_dock)
+					g_dock->showWhatsNew(true);
+			});
 	} else if (event == OBS_FRONTEND_EVENT_EXIT) {
 		if (Plugin *plugin = Plugin::instance())
 			plugin->saveNow();
