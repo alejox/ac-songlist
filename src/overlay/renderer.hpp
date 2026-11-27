@@ -27,6 +27,9 @@ struct OverlayStyle {
 	Mode mode = NowPlaying;
 	Skin skin = Minimal;
 	BarStyle barStyle = BarGlass;
+	// Tarjeta: tema de colores. 0 = con los colores elegidos en la fuente; 1..kCardThemes = temas
+	// listos (Medianoche, Nieve, Neon, Aurora, Cristal, Menta).
+	int cardTheme = 1;
 	bool animate = true; // carretes, disco y ecualizador en movimiento (skins retro y barra)
 	int width = 900;
 	int height = 180;
@@ -134,6 +137,9 @@ inline bool isAnimated(const OverlayStyle &s)
 		return s.animate; // el disco y, en la tarjeta, la cinta de la cola
 	return s.animate && s.skin != OverlayStyle::Minimal && s.mode == OverlayStyle::NowPlaying;
 }
+
+// Temas listos de la tarjeta de la barra (ademas del 0, con tus colores).
+constexpr int kCardThemes = 6;
 
 // Duracion del cambio de disco del tocadiscos, en segundos.
 constexpr double kTurntableChange = 2.7;

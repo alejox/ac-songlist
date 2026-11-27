@@ -82,6 +82,7 @@ void readSettings(OverlaySource *ctx, obs_data_t *settings)
 	s.columns = qBound(1, int(obs_data_get_int(settings, "columns")), 6);
 	s.barCenterPercent = qBound(20, int(obs_data_get_int(settings, "bar_center")), 60);
 	s.barStyle = OverlayStyle::BarStyle(qBound(0, int(obs_data_get_int(settings, "bar_style")), 1));
+	s.cardTheme = qBound(0, int(obs_data_get_int(settings, "card_theme")), kCardThemes);
 
 	ctx->width = uint32_t(s.width);
 	ctx->height = uint32_t(s.height);
@@ -207,11 +208,16 @@ bool modeChanged(obs_properties_t *props, obs_property_t *, obs_data_t *settings
 	const bool bar = mode == OverlayStyle::Bar; // los tres a la vez, siempre en cristal
 	// Los skins retro traen su paleta: solo usan el color de acento.
 	const bool minimal = bar || obs_data_get_int(settings, "skin") == OverlayStyle::Minimal;
+	// Tarjeta con un tema listo: los colores los pone el tema
+	const bool card = bar && obs_data_get_int(settings, "bar_style") == OverlayStyle::BarCard;
+	const bool themed = card && obs_data_get_int(settings, "card_theme") > 0;
 	setVisible(props, "skin", !bar);
-	setVisible(props, "text_color", minimal);
-	setVisible(props, "bg_color", minimal);
-	setVisible(props, "bg_opacity", minimal);
-	setVisible(props, "radius", minimal);
+	setVisible(props, "text_color", minimal && !themed);
+	setVisible(props, "bg_color", minimal && !themed);
+	setVisible(props, "bg_opacity", minimal && !themed);
+	setVisible(props, "accent_color", !themed);
+	setVisible(props, "card_theme", card);
+	setVisible(props, "radius", minimal && !themed);
 	setVisible(props, "padding", minimal || !np);
 	setVisible(props, "animate", bar || (!minimal && np));
 	setVisible(props, "show_howto", queue || list || bar);
@@ -260,6 +266,13 @@ obs_properties_t *sourceProperties(void *)
 							   OBS_COMBO_FORMAT_INT);
 	obs_property_list_add_int(barStyle, obs_module_text("Source.BarStyle.Glass"), OverlayStyle::BarGlass);
 	obs_property_list_add_int(barStyle, obs_module_text("Source.BarStyle.Card"), OverlayStyle::BarCard);
+	obs_property_set_modified_callback(barStyle, modeChanged);
+	obs_property_t *theme = obs_properties_add_list(props, "card_theme", obs_module_text("Source.CardTheme"), OBS_COMBO_TYPE_LIST,
+							OBS_COMBO_FORMAT_INT);
+	for (int i = 1; i <= kCardThemes; i++)
+		obs_property_list_add_int(theme, obs_module_text(QStringLiteral("Source.CardTheme.%1").arg(i).toUtf8().constData()), i);
+	obs_property_list_add_int(theme, obs_module_text("Source.CardTheme.0"), 0);
+	obs_property_set_modified_callback(theme, modeChanged);
 
 	obs_property_t *skin = obs_properties_add_list(props, "skin", obs_module_text("Source.Skin"), OBS_COMBO_TYPE_LIST,
 						       OBS_COMBO_FORMAT_INT);
@@ -350,6 +363,7 @@ void sourceDefaults(obs_data_t *settings)
 	obs_data_set_default_int(settings, "page_seconds", 8);
 	obs_data_set_default_int(settings, "bar_center", 34);
 	obs_data_set_default_int(settings, "bar_style", OverlayStyle::BarGlass);
+	obs_data_set_default_int(settings, "card_theme", 1);
 }
 
 } // namespace

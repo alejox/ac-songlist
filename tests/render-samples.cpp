@@ -286,16 +286,10 @@ int main(int argc, char **argv)
 			cd.songs.removeLast();
 		cd.pages = 12;
 		cd.page = 2;
-		const QColor accents[] = {QColor(244, 114, 82), QColor(139, 92, 246), QColor(163, 230, 53), QColor(129, 140, 248),
-					  QColor(56, 189, 248), QColor(45, 212, 191)};
-		for (int i = 0; i < 6; i++) {
+		for (int i = 0; i <= kCardThemes; i++) { // los seis temas y "con mis colores"
 			OverlayStyle c = card;
-			c.accentColor = accents[i];
-			if (i == 1) { // claro
-				c.backgroundColor = QColor(255, 255, 255);
-				c.textColor = QColor(17, 19, 26);
-				c.mutedColor = QColor(17, 19, 26, 150);
-			}
+			c.cardTheme = i;
+			c.accentColor = QColor(244, 114, 182);
 			saveOnScene(renderOverlay(c, cd, 1.0, 0.6 + i), dir + QString("/40-tarjeta-%1.png").arg(i));
 		}
 		OverlayData idle = cd; // sin nada sonando, cola vacia

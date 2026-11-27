@@ -81,7 +81,19 @@ Puedes agregar la fuente **varias veces**, una por cada modo, y colocar cada una
 
 Cada parte se enciende o se apaga desde el panel AC Songlist, con las casillas **Barra: Sonando · Cola · Lista** (están debajo de «Sonando ahora»). Las que quedan encendidas se reparten todo el ancho; si apagas la cola, por ejemplo, la lista se pone al lado de «Sonando ahora».
 
-**Diseño de la barra.** En las propiedades de la fuente eliges entre **Cristal de borde a borde** (el de arriba) y **Tarjeta**: una tarjeta oscura con una línea de tu color de acento arriba, la portada de la canción con su disco, etiquetas con el tiempo que lleva sonando, el artista y quién la pidió, el siguiente pedido en grande con el resto de la cola pasando como una cinta, y una barra de progreso de las páginas de la lista. Con fondo blanco y texto oscuro queda en versión clara.
+**Diseño de la barra.** En las propiedades de la fuente eliges entre **Cristal de borde a borde** (el de arriba) y **Tarjeta**: una tarjeta con una línea de color arriba, la portada de la canción con su disco, etiquetas con el artista y quién la pidió, el siguiente pedido en grande con el resto de la cola pasando como una cinta, y una barra de progreso de las páginas de la lista.
+
+En **Tema de la tarjeta** eliges el aspecto:
+
+| Tema | Cómo se ve |
+|---|---|
+| **Medianoche** | Grafito oscuro, acento coral que pasa a ámbar, punto rojo y borde fino. |
+| **Nieve** | Blanca, acento violeta a índigo y sombra más marcada. |
+| **Neón** | Negra, borde verde lima que brilla y esquinas más rectas. |
+| **Aurora** | Degradado de violeta a azul de lado a lado, punto rosa y esquinas más redondas. |
+| **Cristal** | Azul noche translúcido con reflejo y acento celeste. |
+| **Menta** | Verde profundo, esquinas tipo píldora, iconos redondos y etiquetas teñidas. |
+| **Con mis colores** | Usa el color de acento, el fondo y el texto que elijas abajo. |
 
 ![Barra inferior, diseño Tarjeta](docs/barra-tarjeta.png)
 

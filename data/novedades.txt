@@ -1,6 +1,10 @@
 # Novedades de cada version. El plugin las muestra al abrir OBS despues de actualizarse.
 # Formato: "## version" y debajo una linea por novedad empezando con "- ".
 
+## 1.8.1
+- Barra en diseño «Tarjeta»: seis temas para elegir en «Tema de la tarjeta»: Medianoche (grafito y coral), Nieve (blanca y violeta), Neón (negra con borde verde que brilla), Aurora (degradado violeta a azul), Cristal (azul translúcido) y Menta (verde, esquinas redondas). Con «Con mis colores» usa tu color de acento, fondo y texto.
+- La barra ya no muestra el tiempo que lleva sonando la canción.
+
 ## 1.8.0
 - Nuevo skin «Tocadiscos» para la fuente «Sonando ahora»: funda con portada, vinilo y brazo. En cada canción se ve cómo se cambia el disco: el brazo se levanta, el disco se guarda, entra la funda nueva y el brazo baja.
 - Cada canción tiene su propia portada, y la tarjeta toma sus colores.

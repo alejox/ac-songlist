@@ -558,8 +558,7 @@ bool Plugin::updateBar(View &view, qint64 now, double dtMs)
 		      (d.hasPlaying ? QLatin1Char('1') : QLatin1Char('0')) + (d.lastSong ? QLatin1Char('1') : QLatin1Char('0')) + QChar(0x1d) +
 		      QString::number(d.queueTotal) + QChar(0x1f) +
 		      QString::number(d.songsTotal) + QChar(0x1f) + QString::number(d.page) + QChar(0x1f) + QString::number(d.pages) +
-		      QChar(0x1f) + (d.requestsOpen ? QLatin1Char('1') : QLatin1Char('0')) + QChar(0x1f) + d.webUrl + QChar(0x1d) +
-		      QString::number(int(d.elapsed)) + QChar(0x1d);
+		      QChar(0x1f) + (d.requestsOpen ? QLatin1Char('1') : QLatin1Char('0')) + QChar(0x1f) + d.webUrl + QChar(0x1d);
 	for (int i = 0; i < 3; i++)
 		sig += view.sectionIdentity[i] + QChar(0x1f) + QString::number(int(view.sectionOpacity[i] * 255)) + QChar(0x1d);
 	for (const OverlayRow &r : d.queue)

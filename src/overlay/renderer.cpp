@@ -1255,7 +1255,21 @@ OverlayStyle clamped(const OverlayStyle &style)
 // Orden en pantalla, de izquierda a derecha.
 const int kBarOrder[3] = {OverlayStyle::BarNow, OverlayStyle::BarQueue, OverlayStyle::BarList};
 
+// Tema de la tarjeta: colores, fondo, borde y detalles.
+struct CardTheme {
+	QColor bgTop, bgBottom; // fondo; en degradado lateral, de izquierda a derecha
+	bool sideways = false;
+	QColor text, muted, accent, accent2, dot, border;
+	double radius = 0.32;  // esquinas de la tarjeta, por el tamano de letra
+	double round = 0.24;   // esquinas de portada e iconos, por su tamano (0.5 = circulo)
+	int glow = 0;          // brillo del borde en el color de acento
+	bool chipTint = false; // etiquetas tenidas del acento
+	bool sheen = false;    // reflejo de cristal arriba
+	double topLine = 1.0;  // fuerza de la linea de acento de arriba
+};
+
 struct BarGeom {
+	CardTheme theme;
 	double f = 0;   // tamano del titulo; el resto de la letra sale de aqui
 	double pad = 0; // margen interior de cada parte
 	double headerH = 0, listRowH = 0, queueRowH = 0;
@@ -1543,18 +1557,6 @@ QColor withAlpha(QColor c, int alpha)
 }
 
 // iconos pequenos dibujados a mano (no dependen de las fuentes instaladas)
-void iconClock(QPainter &p, const QRectF &r, const QColor &c)
-{
-	p.save();
-	p.setPen(QPen(c, qMax(1.0, r.width() * 0.12)));
-	p.setBrush(Qt::NoBrush);
-	p.drawEllipse(r.adjusted(r.width() * 0.08, r.width() * 0.08, -r.width() * 0.08, -r.width() * 0.08));
-	const QPointF m = r.center();
-	p.drawLine(m, QPointF(m.x(), m.y() - r.height() * 0.26));
-	p.drawLine(m, QPointF(m.x() + r.width() * 0.2, m.y()));
-	p.restore();
-}
-
 void iconHeart(QPainter &p, const QRectF &r, const QColor &c)
 {
 	QPainterPath path;
@@ -1607,7 +1609,7 @@ void iconStar(QPainter &p, const QRectF &r, const QColor &c)
 
 // Etiqueta en una pildora: [icono texto]. Devuelve el ancho usado.
 double chip(QPainter &p, const OverlayStyle &s, double x, double y, double h, double maxW, const QString &text,
-	    void (*icon)(QPainter &, const QRectF &, const QColor &))
+	    void (*icon)(QPainter &, const QRectF &, const QColor &), const QColor &tint = QColor())
 {
 	if (maxW < h * 2)
 		return 0;
@@ -1616,11 +1618,11 @@ double chip(QPainter &p, const OverlayStyle &s, double x, double y, double h, do
 	const double w = qMin(maxW, padX * 2 + iconW + gap + textWidth(font, text) + 2);
 	const QRectF r(x, y, w, h);
 	p.save();
-	p.setPen(QPen(withAlpha(s.textColor, 34), 1));
-	p.setBrush(withAlpha(s.textColor, 14));
+	p.setPen(QPen(tint.isValid() ? withAlpha(tint, 90) : withAlpha(s.textColor, 34), 1));
+	p.setBrush(tint.isValid() ? withAlpha(tint, 34) : withAlpha(s.textColor, 14));
 	p.drawRoundedRect(r.adjusted(0.5, 0.5, -0.5, -0.5), h / 2, h / 2);
 	if (icon)
-		icon(p, QRectF(x + padX, y + (h - iconW) / 2, iconW, iconW), s.mutedColor);
+		icon(p, QRectF(x + padX, y + (h - iconW) / 2, iconW, iconW), tint.isValid() ? tint : s.mutedColor);
 	drawLine(p, font, withAlpha(s.textColor, 215), QRectF(x + padX + iconW + gap, y, w - padX * 2 - iconW - gap, h), text);
 	p.restore();
 	return w;
@@ -1652,42 +1654,155 @@ void cardLabel(QPainter &p, const OverlayStyle &s, const BarGeom &g, const QRect
 	drawLine(p, font, color, QRectF(x, r.top(), r.right() - rightW - x, r.height()), text.toUpper());
 }
 
+// Los temas listos. El 0 usa los colores elegidos en la fuente.
+CardTheme cardTheme(const OverlayStyle &s)
+{
+	CardTheme t;
+	const auto rgb = [](int r, int g, int b, int a = 255) { return QColor(r, g, b, a); };
+	switch (qBound(0, s.cardTheme, kCardThemes)) {
+	case 1: // Medianoche: grafito, acento coral que pasa a ambar
+		t.bgTop = rgb(27, 28, 35);
+		t.bgBottom = rgb(16, 17, 22);
+		t.text = Qt::white;
+		t.muted = rgb(255, 255, 255, 150);
+		t.accent = rgb(244, 114, 82);
+		t.accent2 = rgb(251, 191, 36);
+		t.dot = rgb(239, 68, 68);
+		t.border = rgb(255, 255, 255, 24);
+		break;
+	case 2: // Nieve: blanca, acento violeta, sombra marcada
+		t.bgTop = Qt::white;
+		t.bgBottom = rgb(243, 244, 248);
+		t.text = rgb(18, 20, 28);
+		t.muted = rgb(18, 20, 28, 145);
+		t.accent = rgb(139, 92, 246);
+		t.accent2 = rgb(99, 102, 241);
+		t.dot = rgb(244, 63, 94);
+		t.border = rgb(0, 0, 0, 22);
+		break;
+	case 3: // Neon: negra, borde verde lima que brilla, esquinas rectas
+		t.bgTop = rgb(11, 14, 11);
+		t.bgBottom = rgb(5, 7, 5);
+		t.text = Qt::white;
+		t.muted = rgb(214, 255, 214, 140);
+		t.accent = rgb(163, 230, 53);
+		t.accent2 = rgb(34, 197, 94);
+		t.dot = rgb(163, 230, 53);
+		t.border = rgb(163, 230, 53, 150);
+		t.radius = 0.2;
+		t.round = 0.1;
+		t.glow = 3;
+		t.topLine = 1.5;
+		t.chipTint = true;
+		break;
+	case 4: // Aurora: degradado de violeta a azul de lado a lado
+		t.bgTop = rgb(36, 22, 70);
+		t.bgBottom = rgb(13, 31, 66);
+		t.sideways = true;
+		t.text = Qt::white;
+		t.muted = rgb(224, 228, 255, 165);
+		t.accent = rgb(167, 139, 250);
+		t.accent2 = rgb(96, 165, 250);
+		t.dot = rgb(244, 114, 182);
+		t.border = rgb(167, 139, 250, 70);
+		t.radius = 0.38;
+		break;
+	case 5: // Cristal: azul noche translucido con reflejo, acento celeste
+		t.bgTop = rgb(23, 37, 66, 190);
+		t.bgBottom = rgb(12, 20, 40, 165);
+		t.text = Qt::white;
+		t.muted = rgb(226, 240, 255, 175);
+		t.accent = rgb(56, 189, 248);
+		t.accent2 = rgb(34, 211, 238);
+		t.dot = rgb(56, 189, 248);
+		t.border = rgb(255, 255, 255, 70);
+		t.radius = 0.42;
+		t.sheen = true;
+		break;
+	case 6: // Menta: verde profundo, esquinas de pildora, iconos redondos, etiquetas tenidas
+		t.bgTop = rgb(17, 42, 36);
+		t.bgBottom = rgb(9, 24, 21);
+		t.text = rgb(236, 253, 245);
+		t.muted = rgb(236, 253, 245, 150);
+		t.accent = rgb(45, 212, 191);
+		t.accent2 = rgb(52, 211, 153);
+		t.dot = rgb(52, 211, 153);
+		t.border = rgb(45, 212, 191, 60);
+		t.radius = 0.75;
+		t.round = 0.5;
+		t.chipTint = true;
+		break;
+	default: { // con los colores de la fuente
+		QColor bg = s.backgroundColor;
+		bg.setAlphaF(qBound(0, s.backgroundOpacity, 100) / 100.0);
+		t.bgTop = isLight(s.backgroundColor) ? bg : mix(bg, Qt::white, 0.06);
+		t.bgTop.setAlpha(bg.alpha());
+		t.bgBottom = isLight(s.backgroundColor) ? mix(bg, Qt::black, 0.04) : bg;
+		t.bgBottom.setAlpha(bg.alpha());
+		t.text = s.textColor;
+		t.muted = s.mutedColor;
+		t.accent = s.accentColor;
+		t.accent2 = mix(s.accentColor, Qt::white, 0.25);
+		t.dot = QColor(239, 68, 68);
+		t.border = withAlpha(s.textColor, 26);
+		break;
+	}
+	}
+	return t;
+}
+
 void drawCardBackground(QPainter &p, const OverlayStyle &s, const BarGeom &g)
 {
+	Q_UNUSED(s);
+	const CardTheme &t = g.theme;
 	const QRectF r = g.panel;
-	const double radius = qMin(double(qMax(s.radius, 8)), r.height() / 4);
+	const double radius = qMin(g.f * t.radius, r.height() / 2);
 	QPainterPath path;
 	path.addRoundedRect(r, radius, radius);
-	// sombra suave alrededor
+	// sombra suave alrededor (mas marcada en los temas claros)
+	const int shadowAlpha = isLight(t.bgTop) ? 24 : 16;
 	for (int i = 4; i >= 1; i--) {
 		QPainterPath shadow;
 		const double e = g.f * 0.04 * i;
 		shadow.addRoundedRect(r.adjusted(-e, -e * 0.5, e, e * 1.4), radius + e, radius + e);
-		p.fillPath(shadow, QColor(0, 0, 0, 16));
+		p.fillPath(shadow, QColor(0, 0, 0, shadowAlpha));
 	}
-	QColor bg = s.backgroundColor;
-	bg.setAlphaF(qBound(0, s.backgroundOpacity, 100) / 100.0);
-	QLinearGradient grad(r.topLeft(), r.bottomLeft());
-	grad.setColorAt(0, isLight(s.backgroundColor) ? bg : mix(bg, Qt::white, 0.06));
-	grad.setColorAt(1, isLight(s.backgroundColor) ? mix(bg, Qt::black, 0.04) : bg);
-	if (s.backgroundOpacity > 0)
+	// brillo del borde (neon)
+	for (int i = t.glow; i >= 1; i--) {
+		QPainterPath halo;
+		const double e = g.f * 0.05 * i;
+		halo.addRoundedRect(r.adjusted(-e, -e, e, e), radius + e, radius + e);
+		p.fillPath(halo.subtracted(path), withAlpha(t.accent, 18));
+	}
+	QLinearGradient grad = t.sideways ? QLinearGradient(r.topLeft(), r.topRight()) : QLinearGradient(r.topLeft(), r.bottomLeft());
+	grad.setColorAt(0, t.bgTop);
+	grad.setColorAt(1, t.bgBottom);
+	if (t.bgTop.alpha() > 0 || t.bgBottom.alpha() > 0)
 		p.fillPath(path, grad);
 	p.save();
-	p.setPen(QPen(withAlpha(s.textColor, 26), 1));
+	p.setClipPath(path);
+	if (t.sheen) { // reflejo de cristal en la mitad de arriba
+		QLinearGradient sheen(r.topLeft(), QPointF(r.left(), r.center().y()));
+		sheen.setColorAt(0, QColor(255, 255, 255, 34));
+		sheen.setColorAt(1, QColor(255, 255, 255, 0));
+		p.fillRect(QRectF(r.left(), r.top(), r.width(), r.height() / 2), sheen);
+	}
+	// linea de acento que brilla en el borde de arriba
+	QLinearGradient line(r.topLeft(), r.topRight());
+	line.setColorAt(0, withAlpha(t.accent, 0));
+	line.setColorAt(0.3, withAlpha(t.accent, 230));
+	line.setColorAt(0.7, withAlpha(t.accent2, 170));
+	line.setColorAt(1, withAlpha(t.accent2, 0));
+	p.fillRect(QRectF(r.left(), r.top(), r.width(), qMax(1.5, g.f * 0.045 * t.topLine)), line);
+	QLinearGradient glow(r.topLeft(), QPointF(r.left(), r.top() + g.f * 0.6));
+	glow.setColorAt(0, withAlpha(t.accent, int(26 * t.topLine)));
+	glow.setColorAt(1, withAlpha(t.accent, 0));
+	p.fillRect(QRectF(r.left(), r.top(), r.width(), g.f * 0.6), glow);
+	p.restore();
+	p.save();
+	p.setPen(QPen(t.border, t.glow ? 1.5 : 1));
 	p.setBrush(Qt::NoBrush);
 	p.drawPath(path);
-	// linea de acento que brilla en el borde de arriba
-	p.setClipPath(path);
-	QLinearGradient line(r.topLeft(), r.topRight());
-	line.setColorAt(0, withAlpha(s.accentColor, 0));
-	line.setColorAt(0.35, withAlpha(s.accentColor, 230));
-	line.setColorAt(0.75, withAlpha(s.accentColor, 140));
-	line.setColorAt(1, withAlpha(s.accentColor, 0));
-	p.fillRect(QRectF(r.left(), r.top(), r.width(), qMax(1.5, g.f * 0.045)), line);
-	QLinearGradient glow(r.topLeft(), QPointF(r.left(), r.top() + g.f * 0.6));
-	glow.setColorAt(0, withAlpha(s.accentColor, 26));
-	glow.setColorAt(1, withAlpha(s.accentColor, 0));
-	p.fillRect(QRectF(r.left(), r.top(), r.width(), g.f * 0.6), glow);
 	p.restore();
 	// separadores entre las partes encendidas
 	bool first = true;
@@ -1695,7 +1810,7 @@ void drawCardBackground(QPainter &p, const OverlayStyle &s, const BarGeom &g)
 		if (g.rect[idx].isEmpty())
 			continue;
 		if (!first)
-			p.fillRect(QRectF(g.rect[idx].left(), r.top() + g.pad * 1.1, 1, r.height() - g.pad * 2.2), withAlpha(s.textColor, 28));
+			p.fillRect(QRectF(g.rect[idx].left(), r.top() + g.pad * 1.1, 1, r.height() - g.pad * 2.2), withAlpha(t.text, 28));
 		first = false;
 	}
 }
@@ -1715,7 +1830,7 @@ void drawCardNow(QPainter &p, const OverlayStyle &s, const OverlayData &d, const
 			QPainterPath outside;
 			outside.addRect(g.rect[OverlayStyle::BarNow]);
 			QPainterPath artPath;
-			artPath.addRoundedRect(art, tile * 0.12, tile * 0.12);
+			artPath.addRoundedRect(art, tile * g.theme.round * 0.5, tile * g.theme.round * 0.5);
 			p.save();
 			p.setClipPath(outside.subtracted(artPath));
 			drawDisc(p, discC, discR, coverLight(d.title, d.artist), s.animate ? t * 200.0 : 0.0, DiscPrint);
@@ -1726,7 +1841,7 @@ void drawCardNow(QPainter &p, const OverlayStyle &s, const OverlayData &d, const
 	if (any) {
 		drawDisc(p, discC, discR, coverLight(d.title, d.artist), s.animate ? t * 200.0 : 0.0, layer == BarAll ? DiscAll : DiscStill);
 		QPainterPath artPath;
-		artPath.addRoundedRect(art, tile * 0.12, tile * 0.12);
+		artPath.addRoundedRect(art, tile * g.theme.round * 0.5, tile * g.theme.round * 0.5);
 		p.save();
 		p.setClipPath(artPath);
 		p.drawImage(art, coverArt(d.title, d.artist, int(tile + 1)));
@@ -1753,21 +1868,17 @@ void drawCardNow(QPainter &p, const OverlayStyle &s, const OverlayData &d, const
 	p.save();
 	p.setOpacity(p.opacity() * textOpacity);
 	const QString label = d.lastSong ? d.lblLastSong : d.lblNowPlaying;
-	cardLabel(p, s, g, QRectF(x, y, w, labelH), label, s.mutedColor, true, d.hasPlaying ? QColor(239, 68, 68) : withAlpha(s.textColor, 90));
+	cardLabel(p, s, g, QRectF(x, y, w, labelH), label, s.mutedColor, true, d.hasPlaying ? g.theme.dot : withAlpha(s.textColor, 90));
 	y += labelH + gap;
 	drawLine(p, titleFont, any ? s.textColor : s.mutedColor, QRectF(x, y, w, tfm.height()), any ? d.title : d.lblNothing);
 	y += tfm.height() + gap;
 	double cx = x;
 	const double right = x + w;
-	if (d.hasPlaying && d.elapsed >= 0) {
-		const int e = int(d.elapsed);
-		cx += chip(p, s, cx, y, chipH, right - cx, QStringLiteral("%1:%2:%3").arg(e / 3600, 2, 10, QLatin1Char('0'))
-									.arg((e / 60) % 60, 2, 10, QLatin1Char('0')).arg(e % 60, 2, 10, QLatin1Char('0')), iconClock) + g.f * 0.14;
-	}
+	const QColor tint = g.theme.chipTint ? g.theme.accent : QColor();
 	if (any && s.showArtist && !d.artist.isEmpty())
-		cx += chip(p, s, cx, y, chipH, right - cx, d.artist, iconNote) + g.f * 0.14;
+		cx += chip(p, s, cx, y, chipH, right - cx, d.artist, iconNote, tint) + g.f * 0.14;
 	if (any && s.showRequester && !d.requesters.isEmpty())
-		chip(p, s, cx, y, chipH, right - cx, d.requesters.join(QStringLiteral(", ")), iconHeart);
+		chip(p, s, cx, y, chipH, right - cx, d.requesters.join(QStringLiteral(", ")), iconHeart, tint);
 	p.restore();
 }
 
@@ -1833,10 +1944,10 @@ void drawCardQueue(QPainter &p, const OverlayStyle &s, const OverlayData &d, con
 	const double tile = qMin(area * 0.78, g.f * 1.25);
 	const QRectF icon(inner.left(), inner.top() + (area - tile) / 2, tile, tile);
 	QPainterPath tilePath;
-	tilePath.addRoundedRect(icon, tile * 0.24, tile * 0.24);
+	tilePath.addRoundedRect(icon, tile * g.theme.round, tile * g.theme.round);
 	QLinearGradient tileGrad(icon.topLeft(), icon.bottomRight());
-	tileGrad.setColorAt(0, mix(s.accentColor, Qt::white, 0.25));
-	tileGrad.setColorAt(1, mix(s.accentColor, Qt::black, 0.25));
+	tileGrad.setColorAt(0, g.theme.accent);
+	tileGrad.setColorAt(1, g.theme.accent2);
 	p.fillPath(tilePath, tileGrad);
 	iconLines(p, icon.adjusted(tile * 0.24, tile * 0.24, -tile * 0.24, -tile * 0.24), QColor(255, 255, 255, 235));
 
@@ -1881,7 +1992,7 @@ void drawCardList(QPainter &p, const OverlayStyle &s, const OverlayData &d, cons
 	const double tile = labelH * 1.9;
 	const QRectF icon(inner.left(), inner.top(), tile, tile);
 	QPainterPath tilePath;
-	tilePath.addRoundedRect(icon, tile * 0.26, tile * 0.26);
+	tilePath.addRoundedRect(icon, tile * g.theme.round, tile * g.theme.round);
 	p.fillPath(tilePath, withAlpha(s.accentColor, 40));
 	p.save();
 	p.setPen(QPen(withAlpha(s.accentColor, 150), 1));
@@ -1942,8 +2053,8 @@ void drawCardList(QPainter &p, const OverlayStyle &s, const OverlayData &d, cons
 	p.drawRoundedRect(track, barH / 2, barH / 2);
 	const double progress = d.pages > 0 ? double(d.page + 1) / d.pages : 1.0;
 	QLinearGradient fill(track.topLeft(), track.topRight());
-	fill.setColorAt(0, mix(s.accentColor, Qt::white, 0.2));
-	fill.setColorAt(1, s.accentColor);
+	fill.setColorAt(0, g.theme.accent);
+	fill.setColorAt(1, g.theme.accent2);
 	p.setBrush(fill);
 	p.drawRoundedRect(QRectF(track.left(), track.top(), qMax(barH, track.width() * progress), barH), barH / 2, barH / 2);
 	// rayitas: una por pagina (hasta 5), la actual encendida
@@ -1965,12 +2076,17 @@ void drawCardList(QPainter &p, const OverlayStyle &s, const OverlayData &d, cons
 
 void drawBar(QPainter &p, const OverlayStyle &style, const OverlayData &d, double opacity, double seconds, BarLayer layer = BarAll)
 {
-	const BarGeom g = barGeom(style, d.sectionOn);
+	BarGeom g = barGeom(style, d.sectionOn);
 	if (g.rect[0].isEmpty() && g.rect[1].isEmpty() && g.rect[2].isEmpty())
 		return; // todo apagado: no se dibuja ni la franja
 	OverlayStyle s = style; // las cabeceras y demas piezas comunes se miden con la letra de la barra
 	s.fontSize = int(g.f + 0.5);
 	if (s.barStyle == OverlayStyle::BarCard) {
+		g.theme = cardTheme(style);
+		s.textColor = g.theme.text; // las piezas comunes toman los colores del tema
+		s.mutedColor = g.theme.muted;
+		s.accentColor = g.theme.accent;
+		s.backgroundColor = g.theme.bgTop;
 		const double base = qBound(0.0, opacity, 1.0);
 		if (layer != BarMoving) {
 			p.setOpacity(base);
@@ -2024,7 +2140,7 @@ QString barKey(const OverlayStyle &s, const OverlayData &d, double opacity)
 	     QString::number(d.queueTotal) + sep + QString::number(d.songsTotal) + sep + QString::number(d.page) + sep +
 	     QString::number(d.pages) + sep + QString::number(d.requestsOpen) + sep + d.lblNowPlaying + sep + d.lblQueue + sep +
 	     d.lblSongList + sep + d.lblRequestedBy + sep + d.lblHowTo + sep + d.lblClosed + sep + d.lblEmptyQueue + sep +
-	     d.lblEmptyList + sep + d.lblWeb + sep + d.lblSongs + sep + d.lblLastSong + sep + d.lblMore + sep + d.lblTicker + sep + QString::number(int(d.elapsed)) + sep + d.webUrl + QChar(0x1e);
+	     d.lblEmptyList + sep + d.lblWeb + sep + d.lblSongs + sep + d.lblLastSong + sep + d.lblMore + sep + d.lblTicker + sep + d.webUrl + QChar(0x1e);
 	for (const OverlayRow &r : d.queue)
 		k += QString::number(r.number) + sep + r.title + sep + r.artist + sep + r.requester + QChar(0x1e);
 	k += QChar(0x1d);
