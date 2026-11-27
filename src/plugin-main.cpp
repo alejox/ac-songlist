@@ -124,6 +124,11 @@ bool obs_module_load(void)
 							 &hotkey);
 	obs_frontend_add_save_callback(onFrontendSave, nullptr);
 	obs_frontend_add_event_callback(onFrontendEvent, nullptr);
+	// Herramientas → Actualizar AC Songlist
+	obs_frontend_add_tools_menu_item(obs_module_text("Tools.Update"), [](void *) {
+		if (g_dock)
+			g_dock->showUpdateDialog();
+	}, nullptr);
 	addDock();
 
 	blog(LOG_INFO, "[ac-songlist] plugin cargado (version %s)", ACSL_VERSION);

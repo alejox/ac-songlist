@@ -1055,6 +1055,114 @@ void Dock::refreshWebStatus()
 	m_webTopButton->setToolTip(on ? T("Web.Copy.Tip") : T("Web.Top.Publish.Tip"));
 }
 
+void Dock::showUpdateDialog()
+{
+	if (!m_updater)
+		return;
+	if (m_updateDialog) {
+		m_updateDialog->raise();
+		m_updateDialog->activateWindow();
+		return;
+	}
+	auto *dialog = new QDialog(window());
+	m_updateDialog = dialog;
+	dialog->setAttribute(Qt::WA_DeleteOnClose);
+	dialog->setWindowTitle(T("UpdateDialog.Title"));
+	dialog->resize(520, 240);
+	auto *heading = new QLabel(dialog);
+	heading->setTextFormat(Qt::RichText);
+	auto *status = new QLabel(dialog);
+	status->setTextFormat(Qt::RichText);
+	status->setWordWrap(true);
+	status->setMinimumHeight(70);
+	auto *autoBox = new QCheckBox(T("Update.Auto"), dialog);
+	autoBox->setChecked(m_store && m_store->settings().autoUpdate);
+	connect(autoBox, &QCheckBox::toggled, this, [this](bool on) {
+		if (m_autoUpdate)
+			m_autoUpdate->setChecked(on); // misma casilla que en Ajustes
+	});
+	auto *buttons = new QDialogButtonBox(dialog);
+	QPushButton *check = buttons->addButton(T("Update.CheckNow"), QDialogButtonBox::ActionRole);
+	QPushButton *install = buttons->addButton(T("Update.Install"), QDialogButtonBox::ActionRole);
+	QPushButton *notes = buttons->addButton(T("WhatsNew.Button"), QDialogButtonBox::HelpRole);
+	QPushButton *close = buttons->addButton(T("WhatsNew.Ok"), QDialogButtonBox::RejectRole);
+	install->setDefault(true);
+	connect(close, &QPushButton::clicked, dialog, &QDialog::close);
+	connect(notes, &QPushButton::clicked, this, [this]() { showWhatsNew(false); });
+	connect(check, &QPushButton::clicked, this, [this]() {
+		if (m_updater)
+			m_updater->check();
+	});
+	connect(install, &QPushButton::clicked, this, [this]() {
+		if (!m_updater)
+			return;
+		if (m_updater->canInstall() && !m_updater->latest().assetUrl.isEmpty())
+			m_updater->install();
+		else if (!m_updater->latest().pageUrl.isEmpty())
+			QDesktopServices::openUrl(QUrl(m_updater->latest().pageUrl));
+	});
+	const auto refresh = [this, heading, status, check, install]() {
+		if (!m_updater)
+			return;
+		const Updater *u = m_updater;
+		const QString have = u->currentVersion().toHtmlEscaped();
+		const QString next = u->latest().version.toHtmlEscaped();
+		const bool canRun = u->canInstall() && !u->latest().assetUrl.isEmpty();
+		heading->setText(QStringLiteral("<b style=\"font-size:14pt\">AC Songlist %1</b>").arg(have));
+		QString text, color = QStringLiteral("#58a6ff");
+		bool showInstall = false;
+		switch (u->state()) {
+		case Updater::State::Idle:
+		case Updater::State::Checking:
+			text = T("UpdateDialog.Checking");
+			break;
+		case Updater::State::UpToDate:
+			color = QStringLiteral("#3fb950");
+			text = T("UpdateDialog.UpToDate").arg(have);
+			break;
+		case Updater::State::Available:
+			text = T("UpdateDialog.Available").arg(next, have);
+			if (!canRun)
+				text += QStringLiteral("<br>") + T("Update.ManualOnly").toHtmlEscaped();
+			showInstall = true;
+			break;
+		case Updater::State::Installing:
+			text = T("UpdateDialog.Installing").arg(next);
+			break;
+		case Updater::State::Installed:
+			color = QStringLiteral("#3fb950");
+			text = T("UpdateDialog.Installed").arg(u->installedVersion().toHtmlEscaped());
+			break;
+		case Updater::State::Error:
+			color = QStringLiteral("#f85149");
+			text = T("UpdateDialog.Error").arg(u->message().toHtmlEscaped());
+			showInstall = !next.isEmpty();
+			break;
+		}
+		if (!u->enabled()) {
+			color = QStringLiteral("#888888");
+			text = T("UpdateDialog.Disabled");
+		}
+		status->setText(QStringLiteral("<span style=\"color:%1\">\u25cf</span> %2").arg(color, text));
+		install->setVisible(showInstall);
+		install->setText(canRun ? T("Update.Install") : T("Update.Download"));
+		check->setEnabled(u->enabled() && u->state() != Updater::State::Checking && u->state() != Updater::State::Installing);
+	};
+	connect(m_updater, &Updater::stateChanged, dialog, refresh);
+	auto *layout = new QVBoxLayout(dialog);
+	layout->addWidget(heading);
+	layout->addWidget(status, 1);
+	layout->addWidget(autoBox);
+	layout->addWidget(buttons);
+	refresh();
+	dialog->show();
+	dialog->raise();
+	dialog->activateWindow();
+	// al abrirla se busca en el momento (si no se esta ya buscando o instalando)
+	if (m_updater->enabled() && m_updater->state() != Updater::State::Installing && m_updater->state() != Updater::State::Installed)
+		m_updater->check();
+}
+
 void Dock::showWhatsNew(bool onlyIfNew)
 {
 	if (!m_store)

@@ -546,7 +546,8 @@ bool Plugin::updateBar(View &view, qint64 now, double dtMs)
 		view.discSeconds += dtMs / 1000.0;
 	}
 	// la tarjeta pasa los pedidos de la cola como una cinta
-	const bool ticker = s.animate && s.barStyle == OverlayStyle::BarCard && !view.sectionIdentity[OverlayStyle::BarQueue].isEmpty();
+	const bool ticker = s.animate && s.barStyle == OverlayStyle::BarCard &&
+			    (!view.sectionIdentity[OverlayStyle::BarQueue].isEmpty() || !view.sectionIdentity[OverlayStyle::BarList].isEmpty());
 	if (ticker)
 		animating = true;
 	view.data.clock = double(now - m_startedAt) / 1000.0;

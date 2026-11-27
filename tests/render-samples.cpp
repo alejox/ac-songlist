@@ -292,6 +292,22 @@ int main(int argc, char **argv)
 			c.accentColor = QColor(244, 114, 182);
 			saveOnScene(renderOverlay(c, cd, 1.0, 0.6 + i), dir + QString("/40-tarjeta-%1.png").arg(i));
 		}
+		{ // instrucciones bajo la lista con letra grande (no caben: pasan como cinta)
+			OverlayStyle c = card;
+			c.howtoSize = 22;
+			c.howtoFamily = "DejaVu Serif";
+			OverlayData web = cd;
+			web.webUrl = "ac-songlist.vercel.app/argeplaying";
+			saveOnScene(renderOverlay(c, web, 1.0, 0.6), dir + "/43-instrucciones-grandes.png");
+		}
+		for (int op : {100, 60, 0}) { // opacidad del fondo, en todos los temas
+			for (int i = 0; i <= kCardThemes; i++) {
+				OverlayStyle c = card;
+				c.cardTheme = i;
+				c.cardOpacity = op;
+				saveOnScene(renderOverlay(c, cd, 1.0, 0.6), dir + QString("/42-opacidad-%1-tema-%2.png").arg(op).arg(i));
+			}
+		}
 		OverlayData idle = cd; // sin nada sonando, cola vacia
 		idle.hasPlaying = false;
 		idle.lastSong = false;

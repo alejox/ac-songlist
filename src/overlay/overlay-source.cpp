@@ -83,6 +83,13 @@ void readSettings(OverlaySource *ctx, obs_data_t *settings)
 	s.barCenterPercent = qBound(20, int(obs_data_get_int(settings, "bar_center")), 60);
 	s.barStyle = OverlayStyle::BarStyle(qBound(0, int(obs_data_get_int(settings, "bar_style")), 1));
 	s.cardTheme = qBound(0, int(obs_data_get_int(settings, "card_theme")), kCardThemes);
+	s.cardOpacity = qBound(0, int(obs_data_get_int(settings, "card_opacity")), 100);
+	if (obs_data_t *howto = obs_data_get_obj(settings, "howto_font")) {
+		s.howtoFamily = QString::fromUtf8(obs_data_get_string(howto, "face"));
+		s.howtoSize = qBound(0, int(obs_data_get_int(howto, "size")), 200);
+		s.howtoBold = (obs_data_get_int(howto, "flags") & OBS_FONT_BOLD) != 0;
+		obs_data_release(howto);
+	}
 
 	ctx->width = uint32_t(s.width);
 	ctx->height = uint32_t(s.height);
@@ -214,7 +221,9 @@ bool modeChanged(obs_properties_t *props, obs_property_t *, obs_data_t *settings
 	setVisible(props, "skin", !bar);
 	setVisible(props, "text_color", minimal && !themed);
 	setVisible(props, "bg_color", minimal && !themed);
-	setVisible(props, "bg_opacity", minimal && !themed);
+	setVisible(props, "bg_opacity", minimal && !card);
+	setVisible(props, "card_opacity", card);
+	setVisible(props, "howto_font", card);
 	setVisible(props, "accent_color", !themed);
 	setVisible(props, "card_theme", card);
 	setVisible(props, "radius", minimal && !themed);
@@ -273,6 +282,8 @@ obs_properties_t *sourceProperties(void *)
 		obs_property_list_add_int(theme, obs_module_text(QStringLiteral("Source.CardTheme.%1").arg(i).toUtf8().constData()), i);
 	obs_property_list_add_int(theme, obs_module_text("Source.CardTheme.0"), 0);
 	obs_property_set_modified_callback(theme, modeChanged);
+	obs_properties_add_int_slider(props, "card_opacity", obs_module_text("Source.CardOpacity"), 0, 100, 1);
+	obs_properties_add_font(props, "howto_font", obs_module_text("Source.HowtoFont"));
 
 	obs_property_t *skin = obs_properties_add_list(props, "skin", obs_module_text("Source.Skin"), OBS_COMBO_TYPE_LIST,
 						       OBS_COMBO_FORMAT_INT);
@@ -364,6 +375,13 @@ void sourceDefaults(obs_data_t *settings)
 	obs_data_set_default_int(settings, "bar_center", 34);
 	obs_data_set_default_int(settings, "bar_style", OverlayStyle::BarGlass);
 	obs_data_set_default_int(settings, "card_theme", 1);
+	obs_data_set_default_int(settings, "card_opacity", 100);
+	obs_data_t *howto = obs_data_create();
+	obs_data_set_default_string(howto, "face", kDefaultFont);
+	obs_data_set_default_int(howto, "size", 15);
+	obs_data_set_default_int(howto, "flags", OBS_FONT_BOLD);
+	obs_data_set_default_obj(settings, "howto_font", howto);
+	obs_data_release(howto);
 }
 
 } // namespace

@@ -95,6 +95,9 @@ En **Tema de la tarjeta** eliges el aspecto:
 | **Menta** | Verde profundo, esquinas tipo píldora, iconos redondos y etiquetas teñidas. |
 | **Con mis colores** | Usa el color de acento, el fondo y el texto que elijas abajo. |
 
+- **Opacidad del fondo de la tarjeta:** de 100 % (como el tema) a 0 % (sin fondo; quedan el texto, la portada y la línea de color). Funciona en todos los temas.
+- **Letra de las instrucciones:** las instrucciones para pedir van debajo de la lista de canciones; en sus propiedades eliges su letra y tamaño. Si no caben, pasan como una cinta.
+
 ![Barra inferior, diseño Tarjeta](docs/barra-tarjeta.png)
 
 En las propiedades de la fuente puedes cambiar el ancho y el alto (por defecto 1920 × 200; a más alto, más filas), el **ancho de «Sonando ahora»**, el color y la opacidad del cristal, el color de acento, las columnas de la lista y cada cuántos segundos cambia de página.
@@ -201,6 +204,8 @@ En **Ajustes → Actualizaciones** ves qué versión tienes y cuándo se buscó 
 
 - Pulsar **Buscar ahora** para comprobarlo en el momento.
 - Desmarcar **Actualizar automáticamente**. Entonces el plugin solo avisa («Hay una versión nueva») y tú decides cuándo pulsar **Actualizar**.
+
+También puedes actualizar desde el menú de OBS **Herramientas → Actualizar AC Songlist**: se abre una ventana que busca la última versión en el momento y, si hay una nueva, la instala con el botón **Actualizar**.
 
 Si aparece un aviso en rojo («No se pudo instalar…»), pulsa **Descargar** e instálala a mano como la primera vez. Pasa, por ejemplo, si en Windows ejecutaste `instalar.bat` como administrador.
 

@@ -17,6 +17,8 @@ class QTabWidget;
 class QTableWidget;
 class QToolButton;
 
+class QDialog;
+
 namespace acsl {
 
 class TwitchChat;
@@ -30,6 +32,8 @@ public:
 
 	// Ventana con lo nuevo de la version. onlyIfNew: solo si aun no se mostro para esta version.
 	void showWhatsNew(bool onlyIfNew);
+	// Ventana de Herramientas → Actualizar AC Songlist: busca y actualiza con un clic.
+	void showUpdateDialog();
 
 private:
 	QWidget *buildQueueTab();
@@ -101,6 +105,7 @@ private:
 	QLabel *m_updateStatus = nullptr;
 	QPushButton *m_updateCheck = nullptr;
 	QPushButton *m_whatsNew = nullptr;
+	QPointer<QDialog> m_updateDialog;
 	QSpinBox *m_perUser, *m_maxQueue, *m_listSeconds;
 	QLabel *m_settingsSaved;
 };

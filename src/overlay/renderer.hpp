@@ -30,6 +30,11 @@ struct OverlayStyle {
 	// Tarjeta: tema de colores. 0 = con los colores elegidos en la fuente; 1..kCardThemes = temas
 	// listos (Medianoche, Nieve, Neon, Aurora, Cristal, Menta).
 	int cardTheme = 1;
+	int cardOpacity = 100; // tarjeta: opacidad del fondo, 0..100 (0 = sin fondo; quedan texto y portada)
+	// tarjeta: letra de las instrucciones bajo la lista (vacio / 0 = la de la barra, a su escala)
+	QString howtoFamily;
+	int howtoSize = 0;
+	bool howtoBold = true;
 	bool animate = true; // carretes, disco y ecualizador en movimiento (skins retro y barra)
 	int width = 900;
 	int height = 180;

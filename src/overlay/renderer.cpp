@@ -29,6 +29,15 @@ QFont makeFont(const OverlayStyle &s, double px, bool bold, double spacing = 0)
 	return f;
 }
 
+// Letra de las instrucciones de la tarjeta: la elegida en la fuente o la de la barra a su escala.
+QFont howtoFont(const OverlayStyle &s, double f)
+{
+	QFont font = makeFont(s, s.howtoSize > 0 ? double(s.howtoSize) : f * 0.286, s.howtoBold);
+	if (!s.howtoFamily.isEmpty())
+		font.setFamily(s.howtoFamily);
+	return font;
+}
+
 double textWidth(const QFont &f, const QString &t)
 {
 	return QFontMetricsF(f).horizontalAdvance(t);
@@ -1266,6 +1275,7 @@ struct CardTheme {
 	bool chipTint = false; // etiquetas tenidas del acento
 	bool sheen = false;    // reflejo de cristal arriba
 	double topLine = 1.0;  // fuerza de la linea de acento de arriba
+	double opacity = 1.0;  // opacidad del fondo elegida (tambien apaga sombra, brillo y borde)
 };
 
 struct BarGeom {
@@ -1325,7 +1335,7 @@ BarGeom barGeom(const OverlayStyle &s, const bool on[3])
 				r = QRectF(g.panel.left() + r.left() * sx, g.panel.top(), r.width() * sx, g.panel.height());
 		g.pad = qMin(double(qMax(s.padding, 8)), g.panel.height() * 0.15);
 		const double labelH = QFontMetricsF(makeFont(s, g.f * 0.28, true)).height();
-		const double footH = QFontMetricsF(makeFont(s, g.f * 0.26, true)).height();
+		const double footH = QFontMetricsF(howtoFont(s, g.f)).height();
 		g.listRowH = QFontMetricsF(makeFont(s, g.f * 0.40, false)).height() * 1.12;
 		const double listArea = g.panel.height() - g.pad * 1.5 - labelH * 1.9 - g.f * 0.14 - footH - g.f * 0.28 - qMax(2.0, g.f * 0.1);
 		g.listRows = qMax(1, int((listArea + 1.0) / g.listRowH));
@@ -1732,9 +1742,9 @@ CardTheme cardTheme(const OverlayStyle &s)
 		t.round = 0.5;
 		t.chipTint = true;
 		break;
-	default: { // con los colores de la fuente
+	default: { // con los colores de la fuente (la opacidad la pone el control de la tarjeta)
 		QColor bg = s.backgroundColor;
-		bg.setAlphaF(qBound(0, s.backgroundOpacity, 100) / 100.0);
+		bg.setAlpha(255);
 		t.bgTop = isLight(s.backgroundColor) ? bg : mix(bg, Qt::white, 0.06);
 		t.bgTop.setAlpha(bg.alpha());
 		t.bgBottom = isLight(s.backgroundColor) ? mix(bg, Qt::black, 0.04) : bg;
@@ -1748,6 +1758,11 @@ CardTheme cardTheme(const OverlayStyle &s)
 		break;
 	}
 	}
+	// opacidad del fondo: 100 = el tema tal cual, 0 = sin fondo
+	t.opacity = qBound(0, s.cardOpacity, 100) / 100.0;
+	t.bgTop.setAlphaF(t.bgTop.alphaF() * t.opacity);
+	t.bgBottom.setAlphaF(t.bgBottom.alphaF() * t.opacity);
+	t.border.setAlphaF(t.border.alphaF() * t.opacity);
 	return t;
 }
 
@@ -1760,7 +1775,7 @@ void drawCardBackground(QPainter &p, const OverlayStyle &s, const BarGeom &g)
 	QPainterPath path;
 	path.addRoundedRect(r, radius, radius);
 	// sombra suave alrededor (mas marcada en los temas claros)
-	const int shadowAlpha = isLight(t.bgTop) ? 24 : 16;
+	const int shadowAlpha = int((isLight(t.bgTop) ? 24 : 16) * t.opacity);
 	for (int i = 4; i >= 1; i--) {
 		QPainterPath shadow;
 		const double e = g.f * 0.04 * i;
@@ -1772,7 +1787,7 @@ void drawCardBackground(QPainter &p, const OverlayStyle &s, const BarGeom &g)
 		QPainterPath halo;
 		const double e = g.f * 0.05 * i;
 		halo.addRoundedRect(r.adjusted(-e, -e, e, e), radius + e, radius + e);
-		p.fillPath(halo.subtracted(path), withAlpha(t.accent, 18));
+		p.fillPath(halo.subtracted(path), withAlpha(t.accent, int(18 * t.opacity)));
 	}
 	QLinearGradient grad = t.sideways ? QLinearGradient(r.topLeft(), r.topRight()) : QLinearGradient(r.topLeft(), r.bottomLeft());
 	grad.setColorAt(0, t.bgTop);
@@ -1783,7 +1798,7 @@ void drawCardBackground(QPainter &p, const OverlayStyle &s, const BarGeom &g)
 	p.setClipPath(path);
 	if (t.sheen) { // reflejo de cristal en la mitad de arriba
 		QLinearGradient sheen(r.topLeft(), QPointF(r.left(), r.center().y()));
-		sheen.setColorAt(0, QColor(255, 255, 255, 34));
+		sheen.setColorAt(0, QColor(255, 255, 255, int(34 * t.opacity)));
 		sheen.setColorAt(1, QColor(255, 255, 255, 0));
 		p.fillRect(QRectF(r.left(), r.top(), r.width(), r.height() / 2), sheen);
 	}
@@ -1899,16 +1914,16 @@ QString cardTickerText(const OverlayData &d)
 	}
 	if (d.queueTotal > d.queue.size() && !d.queue.isEmpty())
 		parts << d.lblMore.arg(d.queueTotal - int(d.queue.size()));
-	if (parts.isEmpty())
-		return d.lblTicker;
-	return parts.join(QStringLiteral("   •   ")) + QStringLiteral("   •   ") + d.lblTicker;
+	return parts.join(QStringLiteral("   \u2022   ")); // las instrucciones van bajo la lista
 }
 
 // la cinta: el texto se repite sin fin, siempre a la misma velocidad
 void drawCardTicker(QPainter &p, const OverlayStyle &s, const OverlayData &d, const BarGeom &g, const QRectF &ticker)
 {
 	const QFont font = makeFont(s, g.f * 0.29, false);
-	const QString text = cardTickerText(d) + QStringLiteral("   •   ");
+	if (cardTickerText(d).isEmpty())
+		return;
+	const QString text = cardTickerText(d) + QStringLiteral("   \u2022   ");
 	const double w = textWidth(font, text);
 	if (w <= 1)
 		return;
@@ -1979,99 +1994,120 @@ void drawCardQueue(QPainter &p, const OverlayStyle &s, const OverlayData &d, con
 			sub = sub.isEmpty() ? d.lblRequestedBy.arg(next.requester) : sub + kDot + d.lblRequestedBy.arg(next.requester);
 		drawLine(p, subFont, s.mutedColor, QRectF(x, y, w, sfm.height()), sub);
 	}
-	p.fillRect(QRectF(inner.left(), ticker.top() - g.f * 0.08, inner.width(), 1), withAlpha(s.textColor, 18));
+	if (!cardTickerText(d).isEmpty())
+		p.fillRect(QRectF(inner.left(), ticker.top() - g.f * 0.08, inner.width(), 1), withAlpha(s.textColor, 18));
 	if (layer == BarAll)
 		drawCardTicker(p, s, d, g, ticker);
 }
 
 // Lista: icono, canciones de la pagina, barra de progreso de paginas y como pedir.
-void drawCardList(QPainter &p, const OverlayStyle &s, const OverlayData &d, const BarGeom &g)
+void drawCardList(QPainter &p, const OverlayStyle &s, const OverlayData &d, const BarGeom &g, BarLayer layer)
 {
-	const QRectF inner = g.rect[OverlayStyle::BarList].adjusted(g.pad, g.pad * 0.8, -g.pad, -g.pad * 0.7);
-	const double labelH = QFontMetricsF(makeFont(s, g.f * kCardLabel, true)).height();
-	const double tile = labelH * 1.9;
-	const QRectF icon(inner.left(), inner.top(), tile, tile);
-	QPainterPath tilePath;
-	tilePath.addRoundedRect(icon, tile * g.theme.round, tile * g.theme.round);
-	p.fillPath(tilePath, withAlpha(s.accentColor, 40));
-	p.save();
-	p.setPen(QPen(withAlpha(s.accentColor, 150), 1));
-	p.setBrush(Qt::NoBrush);
-	p.drawPath(tilePath);
-	p.restore();
-	iconStar(p, icon.adjusted(tile * 0.18, tile * 0.18, -tile * 0.18, -tile * 0.18), s.accentColor);
+	if (layer != BarMoving) {
+		const QRectF inner = g.rect[OverlayStyle::BarList].adjusted(g.pad, g.pad * 0.8, -g.pad, -g.pad * 0.7);
+		const double labelH = QFontMetricsF(makeFont(s, g.f * kCardLabel, true)).height();
+		const double tile = labelH * 1.9;
+		const QRectF icon(inner.left(), inner.top(), tile, tile);
+		QPainterPath tilePath;
+		tilePath.addRoundedRect(icon, tile * g.theme.round, tile * g.theme.round);
+		p.fillPath(tilePath, withAlpha(s.accentColor, 40));
+		p.save();
+		p.setPen(QPen(withAlpha(s.accentColor, 150), 1));
+		p.setBrush(Qt::NoBrush);
+		p.drawPath(tilePath);
+		p.restore();
+		iconStar(p, icon.adjusted(tile * 0.18, tile * 0.18, -tile * 0.18, -tile * 0.18), s.accentColor);
 
-	const double hx = icon.right() + g.f * 0.25;
-	QString label = d.lblSongList;
-	if (d.songsTotal > 0)
-		label += QStringLiteral("  ·  %1").arg(d.songsTotal);
-	const QString pageText = d.pages > 1 ? QStringLiteral("%1 / %2").arg(d.page + 1).arg(d.pages) : QString();
-	cardLabel(p, s, g, QRectF(hx, icon.center().y() - labelH / 2, inner.right() - hx, labelH), label, s.mutedColor, false, QColor(),
-		  pageText);
+		const double hx = icon.right() + g.f * 0.25;
+		QString label = d.lblSongList;
+		if (d.songsTotal > 0)
+			label += QStringLiteral("  ·  %1").arg(d.songsTotal);
+		const QString pageText = d.pages > 1 ? QStringLiteral("%1 / %2").arg(d.page + 1).arg(d.pages) : QString();
+		cardLabel(p, s, g, QRectF(hx, icon.center().y() - labelH / 2, inner.right() - hx, labelH), label, s.mutedColor, false, QColor(),
+			  pageText);
 
-	// canciones
-	const QFont rowFont = makeFont(s, g.f * kCardRow, false);
-	const QFont numFont = makeFont(s, g.f * kCardRow, true);
-	const double top = icon.bottom() + g.f * 0.14;
-	if (d.songs.isEmpty()) {
-		drawLine(p, rowFont, s.mutedColor, QRectF(inner.left(), top, inner.width(), g.listRowH), d.lblEmptyList);
-	} else {
-		int maxNumber = 9;
-		for (const OverlayRow &row : d.songs)
-			maxNumber = qMax(maxNumber, row.number);
-		const double numGap = g.f * 0.22;
-		const double numW = s.showNumbers ? textWidth(numFont, QString::number(maxNumber)) + numGap : 0;
-		const double colGap = g.f * 0.5;
-		const double colW = (inner.width() - colGap * (g.listCols - 1)) / g.listCols;
-		for (int i = 0; i < d.songs.size() && i < g.listRows * g.listCols; i++) {
-			const OverlayRow &row = d.songs[i];
-			const int c = i / g.listRows, r = i % g.listRows;
-			const double left = inner.left() + c * (colW + colGap);
-			const double y = top + r * g.listRowH;
-			double x = left;
-			if (s.showNumbers) {
-				p.setFont(numFont);
-				p.setPen(s.accentColor);
-				p.drawText(QRectF(x, y, numW - numGap, g.listRowH), Qt::AlignRight | Qt::AlignVCenter | Qt::TextSingleLine,
-					   QString::number(row.number));
-				x += numW;
+		// canciones
+		const QFont rowFont = makeFont(s, g.f * kCardRow, false);
+		const QFont numFont = makeFont(s, g.f * kCardRow, true);
+		const double top = icon.bottom() + g.f * 0.14;
+		if (d.songs.isEmpty()) {
+			drawLine(p, rowFont, s.mutedColor, QRectF(inner.left(), top, inner.width(), g.listRowH), d.lblEmptyList);
+		} else {
+			int maxNumber = 9;
+			for (const OverlayRow &row : d.songs)
+				maxNumber = qMax(maxNumber, row.number);
+			const double numGap = g.f * 0.22;
+			const double numW = s.showNumbers ? textWidth(numFont, QString::number(maxNumber)) + numGap : 0;
+			const double colGap = g.f * 0.5;
+			const double colW = (inner.width() - colGap * (g.listCols - 1)) / g.listCols;
+			for (int i = 0; i < d.songs.size() && i < g.listRows * g.listCols; i++) {
+				const OverlayRow &row = d.songs[i];
+				const int c = i / g.listRows, r = i % g.listRows;
+				const double left = inner.left() + c * (colW + colGap);
+				const double y = top + r * g.listRowH;
+				double x = left;
+				if (s.showNumbers) {
+					p.setFont(numFont);
+					p.setPen(s.accentColor);
+					p.drawText(QRectF(x, y, numW - numGap, g.listRowH), Qt::AlignRight | Qt::AlignVCenter | Qt::TextSingleLine,
+						   QString::number(row.number));
+					x += numW;
+				}
+				drawTwoTone(p, s, rowFont, QRectF(x, y, left + colW - x, g.listRowH), row.title,
+					    s.showArtist && !row.artist.isEmpty() ? kDash + row.artist : QString());
 			}
-			drawTwoTone(p, s, rowFont, QRectF(x, y, left + colW - x, g.listRowH), row.title,
-				    s.showArtist && !row.artist.isEmpty() ? kDash + row.artist : QString());
 		}
-	}
 
-	// progreso de paginas y pie
-	const QFont footFont = makeFont(s, g.f * kCardFoot * 1.1, true);
+	}
+	// progreso de paginas y, debajo, las instrucciones para pedir (y la pagina web)
+	const QRectF inner = g.rect[OverlayStyle::BarList].adjusted(g.pad, g.pad * 0.8, -g.pad, -g.pad * 0.7);
+	const QFont footFont = howtoFont(s, g.f);
 	const double footH = QFontMetricsF(footFont).height();
 	const double barH = qMax(2.0, g.f * 0.1);
-	const double barY = inner.bottom() - footH - g.f * 0.14 - barH;
-	const QRectF track(inner.left(), barY, inner.width(), barH);
-	p.save();
-	p.setPen(Qt::NoPen);
-	p.setBrush(withAlpha(s.textColor, 22));
-	p.drawRoundedRect(track, barH / 2, barH / 2);
-	const double progress = d.pages > 0 ? double(d.page + 1) / d.pages : 1.0;
-	QLinearGradient fill(track.topLeft(), track.topRight());
-	fill.setColorAt(0, g.theme.accent);
-	fill.setColorAt(1, g.theme.accent2);
-	p.setBrush(fill);
-	p.drawRoundedRect(QRectF(track.left(), track.top(), qMax(barH, track.width() * progress), barH), barH / 2, barH / 2);
-	// rayitas: una por pagina (hasta 5), la actual encendida
 	const int dots = qMin(qMax(1, d.pages), 5);
 	const double dw = g.f * 0.26;
-	for (int i = 0; i < dots; i++) {
-		const bool on = d.pages <= 5 ? i == d.page : i == qMin(4, d.page * 5 / qMax(1, d.pages));
-		p.fillRect(QRectF(inner.left() + i * dw * 1.35, inner.bottom() - footH / 2 - barH / 2, dw, barH),
-			   on ? s.accentColor : withAlpha(s.textColor, 40));
+	if (layer != BarMoving) {
+		const double barY = inner.bottom() - footH - g.f * 0.14 - barH;
+		const QRectF track(inner.left(), barY, inner.width(), barH);
+		p.save();
+		p.setPen(Qt::NoPen);
+		p.setBrush(withAlpha(s.textColor, 22));
+		p.drawRoundedRect(track, barH / 2, barH / 2);
+		const double progress = d.pages > 0 ? double(d.page + 1) / d.pages : 1.0;
+		QLinearGradient fill(track.topLeft(), track.topRight());
+		fill.setColorAt(0, g.theme.accent);
+		fill.setColorAt(1, g.theme.accent2);
+		p.setBrush(fill);
+		p.drawRoundedRect(QRectF(track.left(), track.top(), qMax(barH, track.width() * progress), barH), barH / 2, barH / 2);
+		// rayitas: una por pagina (hasta 5), la actual encendida
+		for (int i = 0; i < dots; i++) {
+			const bool on = d.pages <= 5 ? i == d.page : i == qMin(4, d.page * 5 / qMax(1, d.pages));
+			p.fillRect(QRectF(inner.left() + i * dw * 1.35, inner.bottom() - footH / 2 - barH / 2, dw, barH),
+				   on ? s.accentColor : withAlpha(s.textColor, 40));
+		}
+		p.restore();
 	}
-	p.restore();
-	const QString foot = (s.showWeb && !d.webUrl.isEmpty()) ? d.webUrl : d.lblHowTo;
+	QString foot = d.lblTicker.isEmpty() ? d.lblHowTo : d.lblTicker;
+	if (s.showWeb && !d.webUrl.isEmpty())
+		foot += QStringLiteral("   \u2022   ") + d.webUrl;
+	const double fx = inner.left() + dots * dw * 1.35 + g.f * 0.3;
+	const QRectF area(fx, inner.bottom() - footH, inner.right() - fx, footH);
+	const double w = textWidth(footFont, foot);
+	p.save();
 	p.setFont(footFont);
 	p.setPen(s.mutedColor);
-	const double fx = inner.left() + dots * dw * 1.35 + g.f * 0.3;
-	p.drawText(QRectF(fx, inner.bottom() - footH, inner.right() - fx, footH), Qt::AlignRight | Qt::AlignVCenter | Qt::TextSingleLine,
-		   elide(footFont, foot, inner.right() - fx));
+	if (w <= area.width()) { // cabe: quieto
+		if (layer != BarMoving)
+			p.drawText(area, Qt::AlignLeft | Qt::AlignVCenter | Qt::TextSingleLine, foot);
+	} else if (layer != BarStill) { // no cabe: pasa como una cinta
+		const QString loop = foot + QStringLiteral("   \u2022   ");
+		const double lw = textWidth(footFont, loop);
+		const double offset = s.animate ? std::fmod(d.clock * g.f * 1.2, lw) : 0.0;
+		p.setClipRect(area);
+		for (double x = area.left() - offset; x < area.right(); x += lw)
+			p.drawText(QRectF(x, area.top(), lw + 2, area.height()), Qt::AlignLeft | Qt::AlignVCenter | Qt::TextSingleLine, loop);
+	}
+	p.restore();
 }
 
 void drawBar(QPainter &p, const OverlayStyle &style, const OverlayData &d, double opacity, double seconds, BarLayer layer = BarAll)
@@ -2104,8 +2140,8 @@ void drawBar(QPainter &p, const OverlayStyle &style, const OverlayData &d, doubl
 		}
 		if (show(OverlayStyle::BarQueue))
 			drawCardQueue(p, s, d, g, layer);
-		if (layer != BarMoving && show(OverlayStyle::BarList))
-			drawCardList(p, s, d, g);
+		if (show(OverlayStyle::BarList))
+			drawCardList(p, s, d, g, layer);
 		return;
 	}
 	if (layer != BarMoving) {
@@ -2140,7 +2176,7 @@ QString barKey(const OverlayStyle &s, const OverlayData &d, double opacity)
 	     QString::number(d.queueTotal) + sep + QString::number(d.songsTotal) + sep + QString::number(d.page) + sep +
 	     QString::number(d.pages) + sep + QString::number(d.requestsOpen) + sep + d.lblNowPlaying + sep + d.lblQueue + sep +
 	     d.lblSongList + sep + d.lblRequestedBy + sep + d.lblHowTo + sep + d.lblClosed + sep + d.lblEmptyQueue + sep +
-	     d.lblEmptyList + sep + d.lblWeb + sep + d.lblSongs + sep + d.lblLastSong + sep + d.lblMore + sep + d.lblTicker + sep + d.webUrl + QChar(0x1e);
+	     d.lblEmptyList + sep + d.lblWeb + sep + d.lblSongs + sep + d.lblLastSong + sep + d.lblMore + sep + d.lblTicker + sep + s.howtoFamily + sep + QString::number(s.howtoSize) + sep + d.webUrl + QChar(0x1e);
 	for (const OverlayRow &r : d.queue)
 		k += QString::number(r.number) + sep + r.title + sep + r.artist + sep + r.requester + QChar(0x1e);
 	k += QChar(0x1d);
