@@ -1,6 +1,12 @@
 # Novedades de cada version. El plugin las muestra al abrir OBS despues de actualizarse.
 # Formato: "## version" y debajo una linea por novedad empezando con "- ".
 
+## 1.10.0
+- Barra en diseño «Tarjeta»: nuevo «Diseño de la cola» en las propiedades de la fuente. Además de la cinta, ahora puedes mostrar los 2 siguientes pedidos como portadas con el título abajo y una señal de que vienen más:
+- Galería de portadas: el siguiente en grande con un marco del color del tema, el segundo al lado y una pila con «+N •••».
+- Vinilos asomando: cada pedido es una funda con su disco asomando (que gira despacio) y, al final, discos pequeños que se desvanecen y «+N más».
+- Abanico: las portadas un poco giradas, como cartas en la mano, y una carta punteada con «••• +N».
+
 ## 1.9.0
 - Barra en diseño «Tarjeta»: nuevo control «Opacidad del fondo de la tarjeta», de 100 % (como el tema) a 0 % (sin fondo), en todos los temas.
 - Las instrucciones para pedir ahora van debajo de la lista de canciones; la cinta de la cola muestra solo los pedidos.

@@ -308,6 +308,30 @@ int main(int argc, char **argv)
 				saveOnScene(renderOverlay(c, cd, 1.0, 0.6), dir + QString("/42-opacidad-%1-tema-%2.png").arg(op).arg(i));
 			}
 		}
+		// diseno de la cola: galeria, vinilos y abanico, en varios temas; y con una sola cancion
+		for (int look = OverlayStyle::QueueCovers; look <= OverlayStyle::QueueFan; look++) {
+			for (int theme : {1, 2, 3, 6}) {
+				OverlayStyle c = card;
+				c.cardTheme = theme;
+				c.queueLook = OverlayStyle::QueueLook(look);
+				saveOnScene(renderOverlay(c, cd, 1.0, 0.6), dir + QString("/44-cola-%1-tema-%2.png").arg(look).arg(theme));
+			}
+			OverlayStyle c = card;
+			c.queueLook = OverlayStyle::QueueLook(look);
+			OverlayData one = cd;
+			while (one.queue.size() > 1)
+				one.queue.removeLast();
+			one.queueTotal = 1;
+			saveOnScene(renderOverlay(c, one, 1.0, 0.6), dir + QString("/45-cola-%1-una.png").arg(look));
+			OverlayCache cache; // con cache: la capa quieta mas lo que gira debe dar lo mismo
+			OverlayData two = cd;
+			two.clock = 7.3;
+			const QImage a = renderOverlay(c, two, 1.0, 0.6);
+			renderOverlay(c, two, 1.0, 0.6, &cache);
+			const QImage b = renderOverlay(c, two, 1.0, 0.6, &cache);
+			b.save(dir + QString("/46-cola-%1-cache.png").arg(look));
+			a.save(dir + QString("/46-cola-%1-sincache.png").arg(look));
+		}
 		OverlayData idle = cd; // sin nada sonando, cola vacia
 		idle.hasPlaying = false;
 		idle.lastSong = false;

@@ -97,6 +97,13 @@ En **Tema de la tarjeta** eliges el aspecto:
 
 - **Opacidad del fondo de la tarjeta:** de 100 % (como el tema) a 0 % (sin fondo; quedan el texto, la portada y la línea de color). Funciona en todos los temas.
 - **Letra de las instrucciones:** las instrucciones para pedir van debajo de la lista de canciones; en sus propiedades eliges su letra y tamaño. Si no caben, pasan como una cinta.
+- **Diseño de la cola:** cómo se ve la cola de pedidos en la tarjeta.
+  - **Cinta:** el siguiente pedido en grande y el resto pasando como una cinta.
+  - **Galería de portadas:** los 2 siguientes como portadas con el título, el artista y quién lo pidió abajo; el siguiente, más grande y con un marco del color del tema. Si hay más, una pila de portadas con «+N •••».
+  - **Vinilos asomando:** cada pedido es una funda con su disco asomando (gira despacio) y el título debajo; si hay más, discos pequeños que se desvanecen y «+N más».
+  - **Abanico:** las 2 portadas un poco giradas, como cartas en la mano, con el título abajo; si hay más, una carta punteada con «••• +N».
+
+![Diseños de la cola: galería, vinilos y abanico](docs/cola-portadas.png)
 
 ![Barra inferior, diseño Tarjeta](docs/barra-tarjeta.png)
 

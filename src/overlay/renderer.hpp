@@ -23,6 +23,10 @@ struct OverlayStyle {
 	// Barra: cristal de borde a borde, o tarjeta oscura con linea de acento, portada, cinta
 	// con la cola y barra de progreso de paginas.
 	enum BarStyle { BarGlass = 0, BarCard = 1 };
+	// Tarjeta: como se ve la cola. Cinta = el siguiente en grande y el resto pasando; los
+	// demas muestran los dos siguientes como portadas con el titulo abajo y una senal de que
+	// vienen mas.
+	enum QueueLook { QueueTicker = 0, QueueCovers = 1, QueueVinyl = 2, QueueFan = 3 };
 
 	Mode mode = NowPlaying;
 	Skin skin = Minimal;
@@ -30,6 +34,7 @@ struct OverlayStyle {
 	// Tarjeta: tema de colores. 0 = con los colores elegidos en la fuente; 1..kCardThemes = temas
 	// listos (Medianoche, Nieve, Neon, Aurora, Cristal, Menta).
 	int cardTheme = 1;
+	QueueLook queueLook = QueueTicker; // tarjeta: diseno de la cola
 	int cardOpacity = 100; // tarjeta: opacidad del fondo, 0..100 (0 = sin fondo; quedan texto y portada)
 	// tarjeta: letra de las instrucciones bajo la lista (vacio / 0 = la de la barra, a su escala)
 	QString howtoFamily;
