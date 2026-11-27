@@ -18,8 +18,15 @@ const QString kDot = QStringLiteral("  ·  ");
 QFont makeFont(const OverlayStyle &s, double px, bool bold, double spacing = 0)
 {
 	QFont f;
-	if (!s.fontFamily.isEmpty())
-		f.setFamily(s.fontFamily);
+	// la letra pequena (descripciones, etiquetas, filas) puede tener su propia fuente y tamano
+	const bool small = px < s.fontSize * 0.6;
+	const QString family = (small && !s.subFamily.isEmpty()) ? s.subFamily : s.fontFamily;
+	if (small) {
+		px *= s.subScale;
+		spacing *= s.subScale;
+	}
+	if (!family.isEmpty())
+		f.setFamily(family);
 	f.setPixelSize(qMax(8, int(px + 0.5)));
 	f.setBold(bold);
 	f.setItalic(s.italic);
@@ -32,9 +39,13 @@ QFont makeFont(const OverlayStyle &s, double px, bool bold, double spacing = 0)
 // Letra de las instrucciones de la tarjeta: la elegida en la fuente o la de la barra a su escala.
 QFont howtoFont(const OverlayStyle &s, double f)
 {
-	QFont font = makeFont(s, s.howtoSize > 0 ? double(s.howtoSize) : f * 0.286, s.howtoBold);
+	OverlayStyle plain = s; // tamano propio: sin la escala de las descripciones
+	plain.subScale = 1.0;
+	QFont font = makeFont(plain, s.howtoSize > 0 ? double(s.howtoSize) : f * 0.286, s.howtoBold);
 	if (!s.howtoFamily.isEmpty())
 		font.setFamily(s.howtoFamily);
+	else if (!s.subFamily.isEmpty())
+		font.setFamily(s.subFamily);
 	return font;
 }
 
@@ -155,7 +166,7 @@ void drawNowPlaying(QPainter &p, const OverlayStyle &s, const OverlayData &d)
 
 	if (showLabel) {
 		p.setFont(labelFont);
-		p.setPen(s.accentColor);
+		p.setPen(s.labelColor);
 		p.drawText(QRectF(x, y, w, lfm.height()), Qt::AlignLeft | Qt::AlignVCenter | Qt::TextSingleLine,
 			   elide(labelFont, label, w));
 		y += lfm.height() + gap;
@@ -184,6 +195,12 @@ QColor mix(const QColor &a, const QColor &b, double t)
 		      int(a.blue() + (b.blue() - a.blue()) * t));
 }
 
+QColor withAlphaF(QColor c, double k)
+{
+	c.setAlphaF(c.alphaF() * k);
+	return c;
+}
+
 bool isLight(const QColor &c)
 {
 	return 0.299 * c.redF() + 0.587 * c.greenF() + 0.114 * c.blueF() > 0.62;
@@ -192,6 +209,31 @@ bool isLight(const QColor &c)
 const QColor kPaper(241, 231, 211);
 const QColor kInk(34, 30, 26);
 const QColor kCream(243, 235, 221);
+
+// Color de los titulos y de las descripciones: el del skin, o el elegido si se pidio usar
+// los colores propios de letra.
+QColor inkTitle(const OverlayStyle &s, const QColor &skin)
+{
+	return s.ownTextColors ? s.textColor : skin;
+}
+
+QColor inkSub(const OverlayStyle &s, const QColor &skin)
+{
+	return s.ownTextColors ? s.mutedColor : skin;
+}
+
+QColor inkLabel(const OverlayStyle &s, const QColor &skin)
+{
+	return s.ownTextColors ? s.labelColor : skin;
+}
+
+// instrucciones para pedir: su color, o el de las descripciones
+QColor howtoInk(const OverlayStyle &s)
+{
+	return s.howtoColor.isValid() ? s.howtoColor : s.mutedColor;
+}
+
+const QColor kGold(214, 178, 98); // etiquetas del vinilo (no dependen del acento)
 const QColor kSleeve(32, 28, 26);
 const QColor kGlass(6, 9, 8);
 
@@ -201,7 +243,7 @@ QString monoFamily()
 }
 
 // Paleta y tipografia de cada skin para la cola y la lista.
-OverlayStyle skinned(const OverlayStyle &in)
+OverlayStyle skinnedPalette(const OverlayStyle &in)
 {
 	OverlayStyle s = in;
 	switch (in.skin) {
@@ -220,6 +262,7 @@ OverlayStyle skinned(const OverlayStyle &in)
 		s.textColor = mix(in.accentColor, Qt::white, 0.3);
 		s.mutedColor = QColor(in.accentColor.red(), in.accentColor.green(), in.accentColor.blue(), 175);
 		s.fontFamily = monoFamily();
+		s.subFamily = s.fontFamily;
 		s.bold = false;
 		s.radius = int(in.fontSize * 0.22);
 		break;
@@ -230,9 +273,36 @@ OverlayStyle skinned(const OverlayStyle &in)
 		s.mutedColor = QColor(kCream.red(), kCream.green(), kCream.blue(), 150);
 		s.radius = int(in.fontSize * 0.08);
 		break;
+	case OverlayStyle::NeonCassette: // carcasa oscura; el neon queda para los bordes
+		s.backgroundColor = QColor(22, 23, 28);
+		s.textColor = Qt::white;
+		s.mutedColor = QColor(255, 255, 255, 165);
+		s.radius = int(in.fontSize * 0.3);
+		break;
+	}
+	// etiquetas y numeros: con la paleta del skin, sin depender del acento (el display del
+	// equipo de sonido es todo de un color: el suyo)
+	switch (in.skin) {
+	case OverlayStyle::Minimal: s.labelColor = in.labelColor; break;
+	case OverlayStyle::Cassette: s.labelColor = QColor(178, 52, 40); break;
+	case OverlayStyle::Led: s.labelColor = s.textColor; break;
+	case OverlayStyle::Vinyl:
+	case OverlayStyle::Turntable: s.labelColor = kGold; break;
+	case OverlayStyle::NeonCassette: s.labelColor = QColor(255, 255, 255, 200); break;
 	}
 	s.backgroundOpacity = 100;
 	s.padding = qMax(in.padding, int(in.fontSize * 0.6));
+	return s;
+}
+
+OverlayStyle skinned(const OverlayStyle &in)
+{
+	OverlayStyle s = skinnedPalette(in);
+	if (in.ownTextColors) {
+		s.textColor = in.textColor;
+		s.mutedColor = in.mutedColor;
+		s.labelColor = in.labelColor;
+	}
 	return s;
 }
 
@@ -268,6 +338,23 @@ void drawPanel(QPainter &p, const OverlayStyle &s, const QRectF &card)
 		QColor glow = s.accentColor;
 		glow.setAlpha(16);
 		p.fillPath(glass, glow);
+	} else if (s.skin == OverlayStyle::NeonCassette) {
+		QLinearGradient shell(card.topLeft(), card.bottomRight());
+		shell.setColorAt(0, QColor(52, 55, 64));
+		shell.setColorAt(0.4, QColor(26, 27, 32));
+		shell.setColorAt(1, QColor(20, 21, 25));
+		for (int i = 4; i >= 1; i--) { // halo neon alrededor
+			QPainterPath halo;
+			const double e = f * 0.05 * i;
+			halo.addRoundedRect(card.adjusted(-e, -e, e, e), r + e, r + e);
+			p.fillPath(halo.subtracted(path), QColor(s.accentColor.red(), s.accentColor.green(), s.accentColor.blue(), 16));
+		}
+		p.fillPath(path, shell);
+		p.save();
+		p.setBrush(Qt::NoBrush);
+		p.setPen(QPen(QColor(s.accentColor.red(), s.accentColor.green(), s.accentColor.blue(), 170), qMax(1.0, f * 0.04)));
+		p.drawRoundedRect(card.adjusted(f * 0.12, f * 0.12, -f * 0.12, -f * 0.12), r * 0.8, r * 0.8);
+		p.restore();
 	} else { // Vinyl
 		p.fillPath(path, s.backgroundColor);
 		p.save();
@@ -403,11 +490,12 @@ void drawCassette(QPainter &p, const OverlayStyle &s, const OverlayData &d, doub
 		drawLine(p, labelFont, isLight(s.accentColor) ? kInk : QColor(255, 255, 255),
 			 QRectF(paper.left() + inPad, paper.top(), textW, stripeH), n.label);
 	double y = paper.top() + stripeH + f * 0.14;
-	drawLine(p, titleFont, n.idle ? QColor(kInk.red(), kInk.green(), kInk.blue(), 150) : kInk,
+	const QColor cassetteInk = inkTitle(s, kInk);
+	drawLine(p, titleFont, n.idle ? QColor(cassetteInk.red(), cassetteInk.green(), cassetteInk.blue(), 150) : cassetteInk,
 		 QRectF(paper.left() + inPad, y, textW, tfm.height()), n.title);
 	y += tfm.height() + f * 0.04;
 	if (!n.sub.isEmpty())
-		drawLine(p, subFont, QColor(kInk.red(), kInk.green(), kInk.blue(), 170), QRectF(paper.left() + inPad, y, textW, sfm.height()),
+		drawLine(p, subFont, inkSub(s, QColor(kInk.red(), kInk.green(), kInk.blue(), 170)), QRectF(paper.left() + inPad, y, textW, sfm.height()),
 			 n.sub);
 
 	// ventana con los dos carretes
@@ -502,6 +590,7 @@ void drawLed(QPainter &p, const OverlayStyle &s, const OverlayData &d, double t)
 	const double f = s.fontSize;
 	OverlayStyle mono = s;
 	mono.fontFamily = monoFamily();
+	mono.subFamily = mono.fontFamily; // el display es todo de letra de maquina
 	const QFont labelFont = makeFont(mono, f * 0.32, true, f * 0.05);
 	const QFont subFont = makeFont(mono, f * 0.44, false);
 	const QFontMetricsF lfm(labelFont), sfm(subFont);
@@ -571,13 +660,13 @@ void drawLed(QPainter &p, const OverlayStyle &s, const OverlayData &d, double t)
 		p.setPen(Qt::NoPen);
 		p.setBrush(soft);
 		p.drawPolygon(play);
-		drawLine(p, labelFont, soft, QRectF(x + th * 1.5, y, textW - th * 1.5, lfm.height()), n.label);
+		drawLine(p, labelFont, inkLabel(s, soft), QRectF(x + th * 1.5, y, textW - th * 1.5, lfm.height()), n.label);
 		y += lfm.height() + f * 0.14;
 	}
-	drawDots(p, mask, QRectF(x, y, textW, titleH), rows, t, s.animate, n.idle ? soft : lit, dim);
+	drawDots(p, mask, QRectF(x, y, textW, titleH), rows, t, s.animate, n.idle ? soft : inkTitle(s, lit), dim);
 	y += titleH + f * 0.16;
 	if (!n.sub.isEmpty())
-		drawLine(p, subFont, soft, QRectF(x, y, textW, sfm.height()), n.sub);
+		drawLine(p, subFont, inkSub(s, soft), QRectF(x, y, textW, sfm.height()), n.sub);
 
 	p.save();
 	p.setClipPath(glassPath);
@@ -679,15 +768,14 @@ void drawVinyl(QPainter &p, const OverlayStyle &s, const OverlayData &d, double 
 	const double x = sleeve.left() + pad;
 	double y = sleeve.center().y() - textH / 2;
 	if (!n.label.isEmpty()) {
-		drawLine(p, labelFont, isLight(s.accentColor) ? s.accentColor : mix(s.accentColor, Qt::white, 0.25),
-			 QRectF(x, y, textW, lfm.height()), n.label);
+		drawLine(p, labelFont, inkLabel(s, kGold), QRectF(x, y, textW, lfm.height()), n.label);
 		y += lfm.height() + f * 0.1;
 	}
-	drawLine(p, titleFont, n.idle ? QColor(kCream.red(), kCream.green(), kCream.blue(), 150) : kCream,
+	drawLine(p, titleFont, n.idle ? QColor(kCream.red(), kCream.green(), kCream.blue(), 150) : inkTitle(s, kCream),
 		 QRectF(x, y, textW, tfm.height()), n.title);
 	y += tfm.height() + f * 0.04;
 	if (!n.sub.isEmpty())
-		drawLine(p, subFont, QColor(kCream.red(), kCream.green(), kCream.blue(), 165), QRectF(x, y, textW, sfm.height()), n.sub);
+		drawLine(p, subFont, inkSub(s, QColor(kCream.red(), kCream.green(), kCream.blue(), 165)), QRectF(x, y, textW, sfm.height()), n.sub);
 }
 
 // ------------------------------------------------------------------- portadas
@@ -873,15 +961,34 @@ void drawTurntable(QPainter &p, const OverlayStyle &s, const OverlayData &d, dou
 	if (!d.hasPlaying && !d.lastSong && d.changeT >= kTurntableChange)
 		return;
 	const TurntablePose pose = turntablePose(d);
-	const double f = qMax(10.0, qMin(double(s.fontSize), (s.height - 6) / 3.5));
+	// la funda y el disco salen del alto de la fuente; la letra, del tamano elegido en "Fuente"
+	const double f = qMax(10.0, (s.height - 6) / 3.5);
 	const double S = f * 3.4; // lado de la funda
 	const double R = S * 0.45; // radio del disco
 	const double opacity = p.opacity();
 
-	const QFont labelFont = makeFont(s, f * 0.3, true, f * 0.08);
-	const QFont titleFont = makeFont(s, f * 0.95, true);
-	const QFont subFont = makeFont(s, f * 0.46, false);
-	const QFont infoFont = makeFont(s, f * 0.32, false);
+	// la letra: el titulo con el tamano elegido y el resto a su escala; si no cabe en el alto
+	// de la tarjeta, se reduce todo junto
+	double ft = qMax(8.0, double(s.fontSize));
+	const auto textFonts = [&](double size, QFont *l, QFont *ti, QFont *su, QFont *in) {
+		OverlayStyle ts = s; // el titulo manda: las descripciones se miden contra el
+		ts.fontSize = int(size * 1.2 + 0.5);
+		*l = makeFont(ts, size * 0.4, true, size * 0.09);
+		*ti = makeFont(ts, size * 1.2, true);
+		*su = makeFont(ts, size * 0.68, false);
+		*in = makeFont(ts, size * 0.5, false);
+	};
+	QFont labelFont, titleFont, subFont, infoFont;
+	textFonts(ft, &labelFont, &titleFont, &subFont, &infoFont);
+	{
+		const double room = S * 0.88 * 0.92;
+		const double need = QFontMetricsF(labelFont).height() + QFontMetricsF(titleFont).height() +
+				    QFontMetricsF(subFont).height() + QFontMetricsF(infoFont).height() + ft * 0.08 * 2;
+		if (need > room) {
+			ft *= room / need;
+			textFonts(ft, &labelFont, &titleFont, &subFont, &infoFont);
+		}
+	}
 	const QFontMetricsF lfm(labelFont), tfm(titleFont), sfm(subFont), ifm(infoFont);
 
 	// textos de la cancion que entra y de la que se va
@@ -894,13 +1001,10 @@ void drawTurntable(QPainter &p, const OverlayStyle &s, const OverlayData &d, dou
 		return out;
 	};
 	const QString label = (d.lastSong ? d.lblLastSong : (s.label.trimmed().isEmpty() ? d.lblNowPlaying : s.label.trimmed())).toUpper();
+	// debajo, solo la siguiente de la cola (sin el tiempo que lleva sonando)
 	QString info;
-	if (d.hasPlaying && d.elapsed >= 0)
-		info = QStringLiteral("%1:%2").arg(int(d.elapsed) / 60).arg(int(d.elapsed) % 60, 2, 10, QLatin1Char('0'));
-	if (!d.nextTitle.isEmpty()) {
-		const QString next = d.lblNext.arg(d.nextArtist.isEmpty() ? d.nextTitle : d.nextTitle + kDash + d.nextArtist);
-		info = info.isEmpty() ? next : info + kDot + next;
-	}
+	if (!d.nextTitle.isEmpty())
+		info = d.lblNext.arg(d.nextArtist.isEmpty() ? d.nextTitle : d.nextTitle + kDash + d.nextArtist);
 
 	// medidas: funda y disco a la izquierda, tarjeta detras, texto a la derecha del brazo
 	const double textX0 = S * 0.55 + R * 2.2 + f * 0.9;
@@ -1017,34 +1121,843 @@ void drawTurntable(QPainter &p, const OverlayStyle &s, const OverlayData &d, dou
 		if (alpha <= 0.001)
 			return;
 		const QString subText = sub(artist, by);
-		const double gap = f * 0.08;
+		const double gap = ft * 0.08;
 		double h = lfm.height() + gap + tfm.height() + (subText.isEmpty() ? 0 : sfm.height()) +
-			   ((withInfo && !info.isEmpty()) ? gap * 2 + ifm.height() : 0);
+			   ((withInfo && !info.isEmpty()) ? gap + ifm.height() : 0);
 		double y = card.center().y() - h / 2;
 		p.save();
 		p.setOpacity(opacity * alpha);
 		if (!label.isEmpty() && s.showLabel) {
 			// ecualizador pequeno junto a la etiqueta; se mueve mientras suena
-			const double bw = f * 0.07, bh = lfm.height() * 0.7;
+			const double bw = ft * 0.07, bh = lfm.height() * 0.7;
 			for (int i = 0; i < 4; i++) {
 				const double v = d.hasPlaying && s.animate ? 0.35 + 0.65 * std::fabs(std::sin(t * (3.1 + i * 0.9) + i * 1.3)) : 0.35;
 				p.fillRect(QRectF(tx + i * bw * 1.7, y + lfm.height() / 2 + bh / 2 - bh * v, bw, bh * v), acc);
 			}
-			drawLine(p, labelFont, acc, QRectF(tx + bw * 8, y, tw - bw * 8, lfm.height()), label);
+			drawLine(p, labelFont, inkLabel(s, QColor(255, 255, 255, 200)), QRectF(tx + bw * 8, y, tw - bw * 8, lfm.height()), label);
 		}
 		y += lfm.height() + gap;
-		drawLine(p, titleFont, s.textColor, QRectF(tx, y, tw, tfm.height()), title);
+		drawLine(p, titleFont, inkTitle(s, Qt::white), QRectF(tx, y, tw, tfm.height()), title);
 		y += tfm.height();
 		if (!subText.isEmpty()) {
-			drawLine(p, subFont, QColor(255, 255, 255, 190), QRectF(tx, y, tw, sfm.height()), subText);
+			drawLine(p, subFont, inkSub(s, QColor(255, 255, 255, 190)), QRectF(tx, y, tw, sfm.height()), subText);
 			y += sfm.height();
 		}
 		if (withInfo && !info.isEmpty())
-			drawLine(p, infoFont, QColor(255, 255, 255, 140), QRectF(tx, y + gap * 2, tw, ifm.height()), info);
+			drawLine(p, infoFont, inkSub(s, QColor(255, 255, 255, 140)), QRectF(tx, y + gap, tw, ifm.height()), info);
 		p.restore();
 	};
 	drawText(pose.oldText, d.oldTitle, d.oldArtist, d.oldRequesters, coverLight(d.oldTitle, d.oldArtist), false);
 	drawText(pose.newText, d.title, d.artist, d.requesters, accent, true);
+}
+
+// ------------------------------------------------------------ sonando, de pie
+// Portada grande arriba y el texto debajo, con el titulo en hasta dos lineas.
+
+// Corta un titulo en dos lineas por palabras; la segunda se recorta si aun no cabe.
+QStringList twoLines(const QFont &font, const QString &text, double w)
+{
+	if (textWidth(font, text) <= w)
+		return {text};
+	const QStringList words = text.split(QLatin1Char(' '), Qt::SkipEmptyParts);
+	QString first;
+	int i = 0;
+	for (; i < words.size(); i++) {
+		const QString next = first.isEmpty() ? words[i] : first + QLatin1Char(' ') + words[i];
+		if (textWidth(font, next) > w)
+			break;
+		first = next;
+	}
+	if (first.isEmpty())
+		return {elide(font, text, w)};
+	return {first, elide(font, words.mid(i).join(QLatin1Char(' ')), w)};
+}
+
+struct VLines {
+	bool visible = false, idle = false;
+	QString label, title, artist, by, next;
+};
+
+VLines vLines(const OverlayStyle &s, const OverlayData &d)
+{
+	VLines v;
+	const NowText n = nowText(s, d);
+	v.visible = n.visible;
+	v.idle = n.idle;
+	v.label = n.label;
+	v.title = n.title;
+	if (!n.idle) {
+		if (s.showArtist)
+			v.artist = d.artist;
+		if (s.showRequester && !d.requesters.isEmpty())
+			v.by = d.lblRequestedBy.arg(d.requesters.join(QStringLiteral(", ")));
+		if (!d.nextTitle.isEmpty() && !d.lblNext.isEmpty())
+			v.next = d.lblNext.arg(d.nextArtist.isEmpty() ? d.nextTitle : d.nextTitle + kDash + d.nextArtist);
+	}
+	return v;
+}
+
+struct VFonts {
+	QFont label, title, artist, by, next;
+	double ft = 0;
+};
+
+VFonts vFonts(const OverlayStyle &s, double ft)
+{
+	OverlayStyle ts = s;
+	ts.fontSize = int(ft + 0.5);
+	VFonts f;
+	f.ft = ft;
+	f.label = makeFont(ts, ft * 0.36, true, ft * 0.08);
+	f.title = makeFont(ts, ft, s.bold);
+	f.artist = makeFont(ts, ft * 0.56, false);
+	f.by = makeFont(ts, ft * 0.46, false);
+	f.next = makeFont(ts, ft * 0.42, false);
+	return f;
+}
+
+struct VInk {
+	QColor label, title, sub, next, line;
+};
+
+double vTextHeight(const VFonts &f, const VLines &v, double w)
+{
+	const double gap = f.ft * 0.12;
+	double h = 0;
+	if (!v.label.isEmpty())
+		h += QFontMetricsF(f.label).height() + gap;
+	h += QFontMetricsF(f.title).height() * twoLines(f.title, v.title, w).size();
+	if (!v.artist.isEmpty())
+		h += QFontMetricsF(f.artist).height();
+	if (!v.by.isEmpty())
+		h += QFontMetricsF(f.by).height();
+	if (!v.next.isEmpty())
+		h += gap * 3 + QFontMetricsF(f.next).height();
+	return h;
+}
+
+// Dibuja el bloque de texto desde (x, y); labelIndent deja sitio a la izquierda de la etiqueta.
+void drawVText(QPainter &p, const VFonts &f, const VLines &v, double x, double y, double w, const VInk &ink, double labelIndent = 0)
+{
+	const double gap = f.ft * 0.12;
+	if (!v.label.isEmpty()) {
+		const double h = QFontMetricsF(f.label).height();
+		drawLine(p, f.label, ink.label, QRectF(x + labelIndent, y, w - labelIndent, h), v.label);
+		y += h + gap;
+	}
+	const double th = QFontMetricsF(f.title).height();
+	for (const QString &line : twoLines(f.title, v.title, w)) {
+		drawLine(p, f.title, ink.title, QRectF(x, y, w, th), line);
+		y += th;
+	}
+	if (!v.artist.isEmpty()) {
+		const double h = QFontMetricsF(f.artist).height();
+		drawLine(p, f.artist, ink.sub, QRectF(x, y, w, h), v.artist);
+		y += h;
+	}
+	if (!v.by.isEmpty()) {
+		const double h = QFontMetricsF(f.by).height();
+		drawLine(p, f.by, ink.sub, QRectF(x, y, w, h), v.by);
+		y += h;
+	}
+	if (!v.next.isEmpty()) {
+		y += gap * 1.5;
+		p.fillRect(QRectF(x, y, w, 1), ink.line);
+		y += gap * 1.5;
+		drawLine(p, f.next, ink.next, QRectF(x, y, w, QFontMetricsF(f.next).height()), v.next);
+	}
+}
+
+// Letra de pie: el tamano elegido, sin pasarse del ancho; si no cabe a lo alto, se reduce.
+double vTitleSize(const OverlayStyle &s, double w)
+{
+	return qBound(10.0, double(s.fontSize), w * 0.13);
+}
+
+void drawCoverTile(QPainter &p, const QRectF &r, const QString &title, const QString &artist, double radius)
+{
+	QPainterPath path;
+	path.addRoundedRect(r, radius, radius);
+	for (int i = 3; i >= 1; i--) { // sombra
+		QPainterPath shadow;
+		const double e = r.width() * 0.008 * i;
+		shadow.addRoundedRect(r.adjusted(-e, 0, e, e * 2.2), radius + e, radius + e);
+		p.fillPath(shadow, QColor(0, 0, 0, 26));
+	}
+	p.save();
+	p.setClipPath(path);
+	p.drawImage(r, coverArt(title, artist, int(r.width() + 1)));
+	p.restore();
+	p.save();
+	p.setPen(QPen(QColor(255, 255, 255, 40), 1));
+	p.setBrush(Qt::NoBrush);
+	p.drawPath(path);
+	p.restore();
+}
+
+// Minimalista de pie: tarjeta con la portada arriba y la barra de acento junto al texto.
+void drawNowPlayingV(QPainter &p, const OverlayStyle &s, const OverlayData &d)
+{
+	const VLines v = vLines(s, d);
+	if (!v.visible)
+		return;
+	const double W = s.width, H = s.height;
+	const double pad = qMax(8.0, qMin(double(s.padding), W * 0.08));
+	double ft = vTitleSize(s, W);
+	const double bar = s.accentBar ? qMax(3.0, ft * 0.11) : 0, barGap = s.accentBar ? ft * 0.4 : 0;
+	const double textW = W - pad * 2 - bar - barGap;
+	VFonts f = vFonts(s, ft);
+	double textH = vTextHeight(f, v, textW);
+	const bool art = !v.idle;
+	double A = art ? W - pad * 2 : 0;
+	const double gap = art ? pad * 0.9 : 0;
+	for (int i = 0; i < 6 && pad * 2 + A + gap + textH > H; i++) {
+		if (A > W * 0.45) { // primero se achica la portada
+			A = qMax(W * 0.45, H - pad * 2 - gap - textH);
+			continue;
+		}
+		ft *= 0.88;
+		f = vFonts(s, ft);
+		textH = vTextHeight(f, v, textW);
+	}
+	const QRectF card = placeCard(s, W, pad * 2 + A + gap + textH);
+	drawCard(p, s, card);
+	double y = card.top() + pad;
+	if (art) {
+		const double radius = qMin(double(s.radius), A * 0.12) * 0.8;
+		drawCoverTile(p, QRectF(card.center().x() - A / 2, y, A, A), d.title, d.artist, radius);
+		y += A + gap;
+	}
+	double x = card.left() + pad;
+	if (s.accentBar) {
+		const double nextH = v.next.isEmpty() ? 0 : f.ft * 0.36 + QFontMetricsF(f.next).height();
+		QPainterPath barPath;
+		barPath.addRoundedRect(QRectF(x, y, bar, textH - nextH), bar / 2, bar / 2);
+		p.fillPath(barPath, s.accentColor);
+		x += bar + barGap;
+	}
+	VInk ink{s.labelColor, v.idle ? s.mutedColor : s.textColor, s.mutedColor, withAlphaF(s.mutedColor, 0.8),
+		 withAlphaF(s.textColor, 0.14)};
+	drawVText(p, f, v, x, y, textW, ink);
+}
+
+// Tocadiscos de pie: tarjeta del color de la portada, el disco asomando por arriba de la funda
+// con el brazo encima, y el texto debajo. El cambio de disco es el mismo que en horizontal.
+void drawTurntableV(QPainter &p, const OverlayStyle &s, const OverlayData &d, double t)
+{
+	if (!d.hasPlaying && !d.lastSong && d.changeT >= kTurntableChange)
+		return;
+	const TurntablePose pose = turntablePose(d);
+	const double opacity = p.opacity();
+	const double W = s.width, H = s.height;
+	const double pad = W * 0.07;
+	double A = W - pad * 2; // lado de la funda
+	double ft = vTitleSize(s, W);
+
+	const auto lines = [&](const QString &title, const QString &artist, const QStringList &by, bool withNext) {
+		VLines v;
+		v.visible = true;
+		v.title = title;
+		if (s.showLabel)
+			v.label = (d.lastSong ? d.lblLastSong : (s.label.trimmed().isEmpty() ? d.lblNowPlaying : s.label.trimmed())).toUpper();
+		if (s.showArtist)
+			v.artist = artist;
+		if (s.showRequester && !by.isEmpty())
+			v.by = d.lblRequestedBy.arg(by.join(QStringLiteral(", ")));
+		if (withNext && !d.nextTitle.isEmpty())
+			v.next = d.lblNext.arg(d.nextArtist.isEmpty() ? d.nextTitle : d.nextTitle + kDash + d.nextArtist);
+		return v;
+	};
+	const VLines vNew = lines(d.title, d.artist, d.requesters, true);
+	const VLines vOld = lines(d.oldTitle, d.oldArtist, d.oldRequesters, false);
+	VFonts f = vFonts(s, ft);
+	const auto textH = [&]() { return qMax(vTextHeight(f, vNew, A), d.oldTitle.isEmpty() ? 0.0 : vTextHeight(f, vOld, A)); };
+	double R = A * 0.4, peek = R * 0.55;
+	double tH = textH();
+	for (int i = 0; i < 8 && pad + peek + A + pad * 0.8 + tH + pad > H; i++) {
+		if (A > W * 0.5) {
+			A = qMax(W * 0.5, (H - pad * 1.8 - pad * 0.8 - tH) / 1.22);
+		} else {
+			ft *= 0.88;
+			f = vFonts(s, ft);
+			tH = textH();
+		}
+		R = A * 0.4;
+		peek = R * 0.55;
+	}
+	const QRectF card = placeCard(s, W, pad + peek + A + pad * 0.8 + tH + pad);
+	const double radius = W * 0.06;
+	QPainterPath cardPath;
+	cardPath.addRoundedRect(card, radius, radius);
+	const QColor newDark = coverDark(d.title, d.artist);
+	const QColor tint = pose.tint >= 1 ? newDark : mix(coverDark(d.oldTitle, d.oldArtist), newDark, pose.tint);
+	for (int i = 4; i >= 1; i--) {
+		QPainterPath shadow;
+		const double e = W * 0.008 * i;
+		shadow.addRoundedRect(card.adjusted(-e, -e * 0.3, e, e * 1.6), radius + e, radius + e);
+		p.fillPath(shadow, QColor(0, 0, 0, 18));
+	}
+	QLinearGradient cardGrad(card.topLeft(), card.bottomRight());
+	cardGrad.setColorAt(0, tint.lighter(130));
+	cardGrad.setColorAt(1, tint.darker(160));
+	p.fillPath(cardPath, cardGrad);
+	p.save();
+	p.setClipPath(cardPath);
+	QLinearGradient edge(card.topLeft(), card.topRight());
+	edge.setColorAt(0, QColor(255, 255, 255, 0));
+	edge.setColorAt(0.5, QColor(255, 255, 255, 120));
+	edge.setColorAt(1, QColor(255, 255, 255, 30));
+	p.fillRect(QRectF(card.left(), card.top(), card.width(), qMax(1.0, W * 0.004)), edge);
+
+	// disco y funda (recortados por la tarjeta: la funda sale por la izquierda)
+	const QString sleeveTitle = pose.showOld ? d.oldTitle : d.title;
+	const QString sleeveArtist = pose.showOld ? d.oldArtist : d.artist;
+	const double sleeveTop = card.top() + pad + peek;
+	const double homeLeft = card.center().x() - A / 2;
+	const double sleeveDx = -pose.sleeveShift * (homeLeft - card.left() + A * 1.15);
+	const QRectF sleeve(homeLeft + sleeveDx, sleeveTop, A, A);
+	const QPointF discC(sleeve.center().x(), sleeveTop + R * 1.05 - (peek + R * 0.05) * pose.discOut);
+	const double spin = s.animate ? t * 200.0 : 0.0;
+	if (pose.sleeveShift < 1) {
+		p.save();
+		p.setOpacity(opacity * (1 - pose.sleeveShift));
+		drawDisc(p, discC, R, coverLight(sleeveTitle, sleeveArtist), spin, DiscStill);
+		const double labelR = R * 0.37;
+		p.save();
+		QPainterPath labelPath;
+		labelPath.addEllipse(discC, labelR, labelR);
+		p.setClipPath(labelPath, Qt::IntersectClip);
+		p.translate(discC);
+		p.rotate(spin);
+		p.drawImage(QRectF(-labelR, -labelR, labelR * 2, labelR * 2), coverArt(sleeveTitle, sleeveArtist, int(labelR * 2 + 1)));
+		p.restore();
+		p.setBrush(QColor(20, 18, 17));
+		p.setPen(Qt::NoPen);
+		p.drawEllipse(discC, R * 0.04, R * 0.04);
+		p.translate(sleeve.center());
+		p.rotate(-9.0 * pose.sleeveShift);
+		const QRectF local(-A / 2, -A / 2, A, A);
+		const double sr = A * 0.05;
+		QPainterPath sleevePath;
+		sleevePath.addRoundedRect(local, sr, sr);
+		for (int i = 3; i >= 1; i--) {
+			QPainterPath shadow;
+			const double e = A * 0.01 * i;
+			shadow.addRoundedRect(local.adjusted(-e, -e * 0.3, e, e * 2.0), sr + e, sr + e);
+			p.fillPath(shadow, QColor(0, 0, 0, 24));
+		}
+		p.save();
+		p.setClipPath(sleevePath, Qt::IntersectClip);
+		p.drawImage(local, coverArt(sleeveTitle, sleeveArtist, int(A + 1)));
+		if (pose.sheen >= 0) {
+			const double bx = -A + pose.sheen * A * 2.2;
+			QLinearGradient band(QPointF(bx - A * 0.2, 0), QPointF(bx + A * 0.2, 0));
+			band.setColorAt(0, QColor(255, 255, 255, 0));
+			band.setColorAt(0.5, QColor(255, 255, 255, 90));
+			band.setColorAt(1, QColor(255, 255, 255, 0));
+			p.rotate(15);
+			p.fillRect(QRectF(bx - A * 0.2, -A, A * 0.4, A * 2), band);
+		}
+		p.restore();
+		p.restore();
+	}
+	p.restore();
+
+	// brazo: pivote arriba a la derecha del disco; en reposo cae sobre la esquina de la funda
+	const double homeCy = sleeveTop - peek + R;
+	const QPointF pivot(card.center().x() + R * 1.12, sleeveTop - peek * 0.55);
+	const QPointF playTip(card.center().x() + R * 0.55, sleeveTop - peek * 0.25);
+	Q_UNUSED(homeCy);
+	const double L = std::hypot(playTip.x() - pivot.x(), playTip.y() - pivot.y());
+	const double playAngle = std::atan2(pivot.x() - playTip.x(), playTip.y() - pivot.y());
+	const double angle = playAngle * pose.arm;
+	const QPointF tip(pivot.x() - L * std::sin(angle), pivot.y() + L * std::cos(angle));
+	const double aw = W * 0.012;
+	p.save();
+	p.setOpacity(opacity);
+	QLinearGradient metal(pivot, tip);
+	metal.setColorAt(0, QColor(235, 235, 240));
+	metal.setColorAt(1, QColor(170, 172, 180));
+	p.setPen(QPen(QBrush(metal), qMax(2.0, aw * 1.4), Qt::SolidLine, Qt::RoundCap));
+	p.drawLine(pivot, tip);
+	p.setPen(Qt::NoPen);
+	p.setBrush(QColor(200, 200, 206));
+	p.translate(tip);
+	p.rotate(-angle * 180.0 / M_PI);
+	p.drawRoundedRect(QRectF(-aw * 1.6, -aw * 0.7, aw * 3.2, aw * 2.8), aw * 0.5, aw * 0.5);
+	p.resetTransform();
+	QRadialGradient ball(pivot - QPointF(aw, aw), aw * 4.5);
+	ball.setColorAt(0, QColor(255, 255, 255));
+	ball.setColorAt(1, QColor(150, 152, 160));
+	p.setBrush(ball);
+	p.drawEllipse(pivot, aw * 3.4, aw * 3.4);
+	p.restore();
+
+	// texto con ecualizador junto a la etiqueta; el de la cancion que se va se desvanece
+	const double tx = card.center().x() - A / 2;
+	const double ty = sleeveTop + A + pad * 0.8;
+	const auto drawText = [&](double alpha, const VLines &v, const QColor &acc) {
+		if (alpha <= 0.001)
+			return;
+		p.save();
+		p.setOpacity(opacity * alpha);
+		double indent = 0;
+		if (!v.label.isEmpty()) {
+			const double lh = QFontMetricsF(f.label).height();
+			const double bw = ft * 0.07, bh = lh * 0.7;
+			for (int i = 0; i < 4; i++) {
+				const double val = d.hasPlaying && s.animate ? 0.35 + 0.65 * std::fabs(std::sin(t * (3.1 + i * 0.9) + i * 1.3)) : 0.35;
+				p.fillRect(QRectF(tx + i * bw * 1.7, ty + lh / 2 + bh / 2 - bh * val, bw, bh * val), acc);
+			}
+			indent = bw * 8;
+		}
+		VInk ink{inkLabel(s, QColor(255, 255, 255, 200)), inkTitle(s, Qt::white), inkSub(s, QColor(255, 255, 255, 200)),
+			 inkSub(s, QColor(255, 255, 255, 150)), QColor(255, 255, 255, 40)};
+		drawVText(p, f, v, tx, ty, A, ink, indent);
+		p.restore();
+	};
+	drawText(pose.oldText, vOld, coverLight(d.oldTitle, d.oldArtist));
+	drawText(pose.newText, vNew, coverLight(d.title, d.artist));
+}
+
+// Equipo de sonido de pie: ecualizador grande arriba y el titulo en la pantalla de puntos.
+void drawLedV(QPainter &p, const OverlayStyle &s, const OverlayData &d, double t)
+{
+	const VLines v = vLines(s, d);
+	if (!v.visible)
+		return;
+	const double W = s.width, H = s.height;
+	double ft = vTitleSize(s, W);
+	OverlayStyle mono = s;
+	mono.fontFamily = monoFamily();
+	mono.subFamily = mono.fontFamily;
+	mono.fontSize = int(ft + 0.5);
+	const QFont labelFont = makeFont(mono, ft * 0.36, true, ft * 0.05);
+	const QFont subFont = makeFont(mono, ft * 0.5, false);
+	const QFontMetricsF lfm(labelFont), sfm(subFont);
+	const double bezel = W * 0.03, pad = W * 0.05;
+	const double gw = W - bezel * 2 - pad * 2;
+	const int rows = 15;
+	double titleH = qMin(ft * 1.3, gw / 6.0);
+	const double lines = (v.label.isEmpty() ? 0 : lfm.height() + ft * 0.2) + titleH + ft * 0.2 +
+			     (v.artist.isEmpty() ? 0 : sfm.height()) + (v.by.isEmpty() ? 0 : sfm.height());
+	double specH = qMin(gw * 0.62, H - bezel * 2 - pad * 3 - lines);
+	specH = qMax(specH, 0.0);
+	const QRectF card = placeCard(s, W, bezel * 2 + pad * 3 + specH + lines);
+	QPainterPath frame;
+	frame.addRoundedRect(card, W * 0.04, W * 0.04);
+	QLinearGradient metal(card.topLeft(), card.bottomLeft());
+	metal.setColorAt(0, QColor(66, 68, 74));
+	metal.setColorAt(0.5, QColor(38, 39, 43));
+	metal.setColorAt(1, QColor(22, 23, 26));
+	p.fillPath(frame, metal);
+	const QRectF glass = card.adjusted(bezel, bezel, -bezel, -bezel);
+	QPainterPath glassPath;
+	glassPath.addRoundedRect(glass, W * 0.025, W * 0.025);
+	p.fillPath(glassPath, kGlass);
+	QColor glow = s.accentColor;
+	glow.setAlpha(16);
+	p.fillPath(glassPath, glow);
+	const QColor lit = mix(s.accentColor, Qt::white, 0.3);
+	QColor dim = s.accentColor;
+	dim.setAlpha(17);
+	QColor soft = s.accentColor;
+	soft.setAlpha(190);
+
+	if (specH > 4) {
+		const int bars = 10, segments = 12;
+		const QRectF spectrum(glass.left() + pad, glass.top() + pad, gw, specH);
+		const double barW = spectrum.width() / (bars * 1.3 - 0.3);
+		const double segH = spectrum.height() / (segments * 1.35 - 0.35);
+		const double time = s.animate ? t : 0.0;
+		for (int i = 0; i < bars; i++) {
+			double val = 0.52 + 0.3 * std::sin(time * (2.3 + 0.41 * i) + i * 1.7) + 0.2 * std::sin(time * (4.1 + 0.23 * i) + i * 0.6);
+			if (v.idle)
+				val = 0.0;
+			const int on = qBound(v.idle ? 0 : 1, int(val * segments + 0.5), segments);
+			for (int k = 0; k < segments; k++) {
+				const QRectF seg(spectrum.left() + i * barW * 1.3, spectrum.bottom() - (k + 1) * segH * 1.35 + segH * 0.35, barW, segH);
+				QColor c = dim;
+				if (k < on)
+					c = k >= segments - 2 ? mix(s.accentColor, Qt::white, 0.6) : lit;
+				p.fillRect(seg, c);
+			}
+		}
+	}
+	const double x = glass.left() + pad;
+	double y = glass.top() + pad * 2 + specH;
+	if (!v.label.isEmpty()) {
+		QPolygonF play;
+		const double th = lfm.height() * 0.5;
+		play << QPointF(x, y + lfm.height() / 2 - th / 2) << QPointF(x, y + lfm.height() / 2 + th / 2) << QPointF(x + th * 0.85, y + lfm.height() / 2);
+		p.setPen(Qt::NoPen);
+		p.setBrush(soft);
+		p.drawPolygon(play);
+		drawLine(p, labelFont, inkLabel(s, soft), QRectF(x + th * 1.5, y, gw - th * 1.5, lfm.height()), v.label);
+		y += lfm.height() + ft * 0.2;
+	}
+	const QImage mask = dotMask(s, v.title, rows);
+	drawDots(p, mask, QRectF(x, y, gw, titleH), rows, t, s.animate, v.idle ? soft : inkTitle(s, lit), dim);
+	y += titleH + ft * 0.2;
+	if (!v.artist.isEmpty()) {
+		drawLine(p, subFont, inkSub(s, soft), QRectF(x, y, gw, sfm.height()), v.artist);
+		y += sfm.height();
+	}
+	if (!v.by.isEmpty())
+		drawLine(p, subFont, inkSub(s, withAlphaF(soft, 0.75)), QRectF(x, y, gw, sfm.height()), v.by);
+	p.save();
+	p.setClipPath(glassPath);
+	drawScanlines(p, glass, ft * 0.09);
+	p.restore();
+}
+
+// Vinilo de pie: el disco sale girando por arriba de la funda oscura con filete; dentro, la
+// portada y el texto en crema.
+void drawVinylV(QPainter &p, const OverlayStyle &s, const OverlayData &d, double t)
+{
+	const VLines v = vLines(s, d);
+	if (!v.visible)
+		return;
+	const double W = s.width, H = s.height;
+	double ft = vTitleSize(s, W);
+	const double m = W * 0.05; // margen hasta el filete
+	const double in = W * 0.05; // margen dentro del filete
+	const double innerW = W - (m + in) * 2;
+	VFonts f = vFonts(s, ft);
+	double textH = vTextHeight(f, v, innerW);
+	double A = v.idle ? 0 : innerW * 0.78;
+	double R = W * 0.36;
+	const auto total = [&]() { return R + m + in + A + (A > 0 ? in * 0.8 : 0) + textH + in + m; };
+	for (int i = 0; i < 8 && total() > H; i++) {
+		if (A > innerW * 0.4)
+			A = qMax(innerW * 0.4, A - (total() - H));
+		else {
+			ft *= 0.88;
+			f = vFonts(s, ft);
+			textH = vTextHeight(f, v, innerW);
+		}
+	}
+	const QRectF block = placeCard(s, W, total());
+	const QRectF sleeve(block.left(), block.top() + R, W, block.height() - R);
+	drawDisc(p, QPointF(block.center().x(), sleeve.top()), R, s.accentColor, s.animate ? t * 200.0 : 0.0);
+	for (int i = 3; i >= 1; i--) {
+		const double e = W * 0.008 * i;
+		p.fillRect(sleeve.adjusted(-e, 0, e, e * 2), QColor(0, 0, 0, 22));
+	}
+	p.fillRect(sleeve, kSleeve);
+	QLinearGradient mouth(sleeve.topLeft(), QPointF(sleeve.left(), sleeve.top() + W * 0.05)); // la boca de la funda
+	mouth.setColorAt(0, QColor(0, 0, 0, 120));
+	mouth.setColorAt(1, QColor(0, 0, 0, 0));
+	p.fillRect(QRectF(sleeve.left(), sleeve.top(), sleeve.width(), W * 0.05), mouth);
+	QColor line = s.accentColor;
+	line.setAlpha(210);
+	p.setBrush(Qt::NoBrush);
+	p.setPen(QPen(line, qMax(1.0, W * 0.005)));
+	p.drawRect(sleeve.adjusted(m, m, -m, -m));
+	double y = sleeve.top() + m + in;
+	const double x = sleeve.left() + m + in;
+	if (A > 0) {
+		p.drawImage(QRectF(sleeve.center().x() - A / 2, y, A, A), coverArt(d.title, d.artist, int(A + 1)));
+		y += A + in * 0.8;
+	}
+	VInk ink{inkLabel(s, kGold), v.idle ? QColor(kCream.red(), kCream.green(), kCream.blue(), 150) : inkTitle(s, kCream),
+		 inkSub(s, QColor(kCream.red(), kCream.green(), kCream.blue(), 175)), inkSub(s, QColor(kCream.red(), kCream.green(), kCream.blue(), 130)),
+		 QColor(kCream.red(), kCream.green(), kCream.blue(), 40)};
+	drawVText(p, f, v, x, y, innerW, ink);
+}
+
+// ---------------------------------------------------------------- casete neon
+// Casete futurista: carcasa oscura con piezas metalicas; carretes, tornillos y guias brillan
+// en el color de acento. Arriba la etiqueta con el titulo y la portada en la esquina. Siempre
+// con la forma de un casete (mas ancho que alto), tambien en una fuente de pie.
+void neonGlow(QPainter &p, const QPointF &c, double r, const QColor &neon, int strength)
+{
+	for (int i = 6; i >= 1; i--) {
+		QColor g = neon;
+		g.setAlpha(strength / i);
+		p.setPen(Qt::NoPen);
+		p.setBrush(g);
+		p.drawEllipse(c, r * (1 + i * 0.09), r * (1 + i * 0.09));
+	}
+}
+
+void drawNeonReel(QPainter &p, const QPointF &c, double r, const QColor &neon, double angle)
+{
+	neonGlow(p, c, r * 0.98, neon, 70);
+	p.setPen(Qt::NoPen);
+	p.setBrush(QColor(11, 12, 15));
+	p.drawEllipse(c, r, r);
+	p.setBrush(QColor(42, 44, 51));
+	p.drawEllipse(c, r * 0.97, r * 0.97);
+	p.setBrush(QColor(26, 27, 32));
+	p.drawEllipse(c, r * 0.9, r * 0.9);
+	// anillo de luz
+	QRadialGradient ring(c, r * 0.8);
+	ring.setColorAt(0.0, neon.darker(140));
+	ring.setColorAt(0.62, neon.darker(140));
+	ring.setColorAt(0.66, neon);
+	ring.setColorAt(0.92, neon.lighter(115));
+	ring.setColorAt(1.0, neon.darker(170));
+	p.setBrush(ring);
+	p.drawEllipse(c, r * 0.8, r * 0.8);
+	p.setBrush(QColor(11, 12, 15));
+	p.drawEllipse(c, r * 0.5, r * 0.5);
+	// rueda dentada que gira
+	p.save();
+	p.translate(c);
+	p.rotate(angle);
+	p.setBrush(QColor(74, 77, 86));
+	for (int i = 0; i < 16; i++) {
+		p.save();
+		p.rotate(i * 22.5);
+		p.drawRoundedRect(QRectF(-r * 0.045, -r * 0.46, r * 0.09, r * 0.16), r * 0.02, r * 0.02);
+		p.restore();
+	}
+	p.setBrush(QColor(52, 54, 62));
+	p.drawEllipse(QPointF(0, 0), r * 0.3, r * 0.3);
+	p.setBrush(QColor(11, 12, 15));
+	for (int i = 0; i < 6; i++) {
+		p.save();
+		p.rotate(i * 60);
+		p.drawRect(QRectF(-r * 0.03, -r * 0.3, r * 0.06, r * 0.1));
+		p.restore();
+	}
+	p.drawEllipse(QPointF(0, 0), r * 0.18, r * 0.18);
+	p.restore();
+}
+
+void drawNeonCassette(QPainter &p, const OverlayStyle &s, const OverlayData &d, double t)
+{
+	const NowText n = nowText(s, d);
+	if (!n.visible)
+		return;
+	const QColor neon = s.accentColor;
+	const double W = qMin(double(s.width), s.height * 1.58);
+	const double H = W / 1.58;
+	const QRectF box = placeCard(s, W, H);
+	const double u = W / 76.0; // como el "em" del diseno
+	const double x0 = box.left(), y0 = box.top();
+	const auto R = [&](double l, double tp, double w, double h) { return QRectF(x0 + W * l, y0 + H * tp, W * w, H * h); };
+
+	// carcasa con sombra
+	QPainterPath shellPath;
+	shellPath.addRoundedRect(box, u * 2.2, u * 2.2);
+	for (int i = 4; i >= 1; i--) {
+		QPainterPath shadow;
+		const double e = u * 0.35 * i;
+		shadow.addRoundedRect(box.adjusted(-e * 0.6, -e * 0.2, e * 0.6, e * 1.4), u * 2.2 + e, u * 2.2 + e);
+		p.fillPath(shadow, QColor(0, 0, 0, 26));
+	}
+	QLinearGradient shell(box.topLeft(), box.bottomRight());
+	shell.setColorAt(0, QColor(58, 61, 70));
+	shell.setColorAt(0.4, QColor(28, 29, 34));
+	shell.setColorAt(0.7, QColor(36, 38, 44));
+	shell.setColorAt(1, QColor(21, 22, 26));
+	p.fillPath(shellPath, shell);
+	p.save();
+	p.setPen(QPen(QColor(12, 13, 16), u * 0.25));
+	p.setBrush(Qt::NoBrush);
+	p.drawPath(shellPath);
+	p.setPen(QPen(QColor(255, 255, 255, 22), u * 0.18));
+	p.drawRoundedRect(box.adjusted(u * 1.6, u * 1.6, -u * 1.6, -u * 1.6), u * 1.4, u * 1.4);
+	p.restore();
+
+	// guias laterales con una linea de neon
+	for (int side = 0; side < 2; side++) {
+		const QRectF rail = side == 0 ? R(0.034, 0.08, 0.042, 0.84) : R(1 - 0.034 - 0.042, 0.08, 0.042, 0.84);
+		QLinearGradient rg(rail.topLeft(), rail.topRight());
+		rg.setColorAt(0, QColor(45, 47, 54));
+		rg.setColorAt(0.5, QColor(74, 77, 86));
+		rg.setColorAt(1, QColor(42, 44, 50));
+		QPainterPath railPath;
+		railPath.addRoundedRect(rail, u, u);
+		p.fillPath(railPath, rg);
+		QColor line = neon;
+		line.setAlpha(120);
+		p.fillRect(QRectF(rail.center().x() - rail.width() * 0.15, rail.top() + rail.height() * 0.2, rail.width() * 0.3, rail.height() * 0.6), line);
+	}
+	// tornillos que brillan
+	const double sr = W * 0.018;
+	for (const QPointF &c : {QPointF(x0 + W * 0.06, y0 + H * 0.083), QPointF(x0 + W * 0.94, y0 + H * 0.083),
+				 QPointF(x0 + W * 0.06, y0 + H * 0.917), QPointF(x0 + W * 0.94, y0 + H * 0.917)}) {
+		neonGlow(p, c, sr, neon, 90);
+		p.setBrush(QColor(13, 14, 18));
+		p.drawEllipse(c, sr, sr);
+		p.setBrush(neon);
+		p.drawEllipse(c, sr * 0.82, sr * 0.82);
+		p.setBrush(QColor(13, 14, 18));
+		p.drawEllipse(c, sr * 0.5, sr * 0.5);
+		p.fillRect(QRectF(c.x() - sr * 0.08, c.y() - sr * 0.3, sr * 0.16, sr * 0.6), neon.darker(130));
+	}
+
+	// cambio de cancion: los carretes rebobinan y la etiqueta parpadea
+	const bool changing = d.changeT < 0.9 && !d.changeFromNothing && !d.oldTitle.isEmpty();
+	const double flash = changing ? 0.55 + 0.45 * std::cos(d.changeT * 22.0) : 1.0;
+	const double spin = (s.animate && d.hasPlaying ? t * 160.0 : 0.0) - (changing ? d.changeT * 1600.0 : 0.0);
+
+	// etiqueta de arriba
+	const QRectF label = R(0.11, 0.10, 0.59, 0.23);
+	QPainterPath labelPath;
+	labelPath.moveTo(label.topLeft());
+	labelPath.lineTo(label.topRight());
+	labelPath.lineTo(label.right(), label.top() + label.height() * 0.7);
+	labelPath.lineTo(label.right() - label.width() * 0.04, label.bottom());
+	labelPath.lineTo(label.bottomLeft());
+	labelPath.closeSubpath();
+	QLinearGradient lg(label.topLeft(), label.bottomLeft());
+	lg.setColorAt(0, QColor(13, 14, 18));
+	lg.setColorAt(1, QColor(20, 21, 26));
+	p.fillPath(labelPath, lg);
+	p.save();
+	p.setPen(QPen(QColor(255, 255, 255, 34), qMax(1.0, u * 0.12)));
+	p.setBrush(Qt::NoBrush);
+	p.drawPath(labelPath);
+	p.restore();
+
+	// letra: el tamano elegido, sin salirse de la etiqueta
+	const double room = label.height() - u * 2.4;
+	double ft = qMin(double(s.fontSize), u * 3.5);
+	OverlayStyle ts = s;
+	QFont capF, titleF, artF, playF;
+	const auto fonts = [&]() {
+		ts.fontSize = int(ft + 0.5);
+		capF = makeFont(ts, ft * 0.28, true, ft * 0.07);
+		titleF = makeFont(ts, ft, true);
+		artF = makeFont(ts, ft * 0.5, true);
+		playF = makeFont(ts, ft * 0.26, false, ft * 0.06);
+	};
+	fonts();
+	const auto need = [&]() {
+		return QFontMetricsF(capF).height() + QFontMetricsF(titleF).height() + (n.sub.isEmpty() && !s.showArtist ? 0 : QFontMetricsF(artF).height()) +
+		       QFontMetricsF(playF).height();
+	};
+	for (int i = 0; i < 6 && need() > room; i++) {
+		ft *= 0.88;
+		fonts();
+	}
+	p.save();
+	p.setOpacity(p.opacity() * flash);
+	const double lx = label.left() + u * 2.0, lw = label.width() - u * 3.4;
+	double ly = label.top() + (label.height() - need()) / 2;
+	drawLine(p, capF, inkLabel(s, QColor(255, 255, 255, 160)), QRectF(lx, ly, lw, QFontMetricsF(capF).height()), n.label);
+	ly += QFontMetricsF(capF).height();
+	drawLine(p, titleF, n.idle ? QColor(255, 255, 255, 150) : inkTitle(s, Qt::white), QRectF(lx, ly, lw, QFontMetricsF(titleF).height()), n.title);
+	ly += QFontMetricsF(titleF).height();
+	if (s.showArtist && !d.artist.isEmpty() && !n.idle) {
+		drawLine(p, artF, inkSub(s, QColor(255, 255, 255, 215)), QRectF(lx, ly, lw, QFontMetricsF(artF).height()), d.artist);
+		ly += QFontMetricsF(artF).height();
+	}
+	if (!n.idle) { // triangulo de PLAY (o pausa al terminar)
+		const QFontMetricsF pfm(playF);
+		const double th = pfm.height() * 0.55;
+		p.setPen(Qt::NoPen);
+		p.setBrush(neon);
+		if (d.hasPlaying) {
+			QPolygonF tri;
+			tri << QPointF(lx, ly + pfm.height() / 2 - th / 2) << QPointF(lx, ly + pfm.height() / 2 + th / 2) << QPointF(lx + th * 0.85, ly + pfm.height() / 2);
+			p.drawPolygon(tri);
+		} else {
+			p.drawRect(QRectF(lx, ly + pfm.height() / 2 - th / 2, th * 0.3, th));
+			p.drawRect(QRectF(lx + th * 0.55, ly + pfm.height() / 2 - th / 2, th * 0.3, th));
+		}
+		drawLine(p, playF, QColor(255, 255, 255, 150), QRectF(lx + th * 1.6, ly, lw, pfm.height()), d.hasPlaying ? QStringLiteral("PLAY") : QStringLiteral("STOP"));
+	}
+	p.restore();
+
+	// portada en la esquina
+	const QRectF cover = R(0.72, 0.10, 0.17, 0.23);
+	if (!n.idle) {
+		const double cr = u * 0.6;
+		QPainterPath coverPath;
+		coverPath.addRoundedRect(cover, cr, cr);
+		p.save();
+		p.setOpacity(p.opacity() * flash);
+		p.setClipPath(coverPath);
+		const double side = qMax(cover.width(), cover.height());
+		p.drawImage(QRectF(cover.center().x() - side / 2, cover.center().y() - side / 2, side, side), coverArt(d.title, d.artist, int(side + 1)));
+		p.restore();
+		p.save();
+		p.setPen(QPen(QColor(neon.red(), neon.green(), neon.blue(), 130), qMax(1.0, u * 0.15)));
+		p.setBrush(Qt::NoBrush);
+		p.drawPath(coverPath);
+		p.restore();
+	}
+
+	// ventana de la cinta con los dos carretes
+	const QRectF deck = R(0.11, 0.38, 0.78, 0.34);
+	QPainterPath deckPath;
+	deckPath.addRoundedRect(deck, u * 1.6, u * 1.6);
+	QLinearGradient dg(deck.topLeft(), deck.bottomLeft());
+	dg.setColorAt(0, QColor(10, 11, 14));
+	dg.setColorAt(1, QColor(21, 22, 27));
+	p.fillPath(deckPath, dg);
+	p.save();
+	p.setPen(QPen(QColor(255, 255, 255, 26), qMax(1.0, u * 0.15)));
+	p.setBrush(Qt::NoBrush);
+	p.drawPath(deckPath);
+	p.restore();
+	const double rr = deck.width() * 0.115;
+	drawNeonReel(p, QPointF(deck.left() + deck.width() * 0.185, deck.center().y()), rr, neon, spin);
+	drawNeonReel(p, QPointF(deck.right() - deck.width() * 0.185, deck.center().y()), rr, neon, spin * 1.15);
+	const QRectF win(deck.left() + deck.width() * 0.39, deck.top() + deck.height() * 0.22, deck.width() * 0.22, deck.height() * 0.48);
+	p.fillRect(win, QColor(26, 27, 32));
+	for (double gx = win.left() + u * 0.45; gx < win.right(); gx += u * 0.7)
+		p.fillRect(QRectF(gx, win.top(), u * 0.25, win.height()), QColor(42, 44, 51));
+	p.save();
+	p.setPen(QPen(QColor(255, 255, 255, 46), qMax(1.0, u * 0.15)));
+	p.setBrush(Qt::NoBrush);
+	p.drawRoundedRect(win, u * 0.5, u * 0.5);
+	p.restore();
+	p.fillRect(QRectF(win.center().x() + win.width() * 0.04, win.bottom() - win.height() * 0.42, u * 0.35, win.height() * 0.42), neon);
+	const QFont tinyF = makeFont(ts, u * 0.95, true, u * 0.2);
+	drawLine(p, tinyF, QColor(255, 255, 255, 110), QRectF(deck.left() + u * 1.4, deck.top() + u * 0.6, deck.width() * 0.3, u * 1.6), QStringLiteral("LADO A"));
+	p.setFont(tinyF);
+	p.setPen(QColor(255, 255, 255, 110));
+	p.drawText(QRectF(deck.right() - deck.width() * 0.35 - u * 1.4, deck.top() + u * 0.6, deck.width() * 0.35, u * 1.6),
+		   Qt::AlignRight | Qt::AlignVCenter | Qt::TextSingleLine, QStringLiteral("AC SONGLIST"));
+
+	// abajo: quien la pidio, la siguiente y la "A"
+	const QRectF bottom = R(0.11, 0.75, 0.78, 0.09);
+	p.fillRect(QRectF(bottom.left(), bottom.top(), bottom.width(), qMax(1.0, u * 0.12)), QColor(255, 255, 255, 26));
+	const QFont byF = makeFont(ts, qMin(ft * 0.36, u * 1.3), true, u * 0.2);
+	const QFont nextF = makeFont(ts, qMin(ft * 0.3, u * 1.05), false);
+	const QFont sideF = makeFont(ts, u * 2.2, true);
+	const double sideW = textWidth(sideF, QStringLiteral("A")) + u;
+	p.setFont(sideF);
+	p.setPen(neon);
+	p.drawText(QRectF(bottom.right() - sideW, bottom.top(), sideW, bottom.height()), Qt::AlignRight | Qt::AlignVCenter, QStringLiteral("A"));
+	double bx = bottom.left() + u * 0.4;
+	if (s.showRequester && !d.requesters.isEmpty() && !n.idle) {
+		const QString by = d.lblRequestedBy.arg(d.requesters.join(QStringLiteral(", "))).toUpper();
+		const double bw = qMin(textWidth(byF, by) + 2, bottom.width() * 0.55);
+		drawLine(p, byF, inkSub(s, QColor(255, 255, 255, 220)), QRectF(bx, bottom.top(), bw, bottom.height()), by);
+		bx += bw + u * 1.4;
+	}
+	if (!d.nextTitle.isEmpty() && !d.lblNext.isEmpty())
+		drawLine(p, nextF, inkSub(s, QColor(255, 255, 255, 150)), QRectF(bx, bottom.top(), bottom.right() - sideW - bx - u, bottom.height()),
+			 d.lblNext.arg(d.nextArtist.isEmpty() ? d.nextTitle : d.nextTitle + kDash + d.nextArtist));
+
+	// pie con los agujeros
+	const QRectF foot = R(0.30, 0.875, 0.40, 0.09);
+	QPainterPath footPath;
+	footPath.addRoundedRect(foot.adjusted(0, 0, 0, u), u, u);
+	QLinearGradient fg(foot.topLeft(), foot.bottomLeft());
+	fg.setColorAt(0, QColor(36, 38, 45));
+	fg.setColorAt(1, QColor(23, 24, 28));
+	p.save();
+	p.setClipRect(box);
+	p.fillPath(footPath, fg);
+	p.restore();
+	p.setPen(Qt::NoPen);
+	const double hy = foot.center().y();
+	const double holes[4][2] = {{0.14, 0.06}, {0.38, 0.1}, {0.62, 0.1}, {0.86, 0.06}};
+	for (const auto &h : holes) {
+		const double hr = foot.width() * h[1] / 2;
+		p.setBrush(QColor(58, 60, 68));
+		p.drawEllipse(QPointF(foot.left() + foot.width() * h[0], hy), hr + u * 0.25, hr + u * 0.25);
+		p.setBrush(QColor(5, 5, 7));
+		p.drawEllipse(QPointF(foot.left() + foot.width() * h[0], hy), hr, hr);
+	}
 }
 
 // Cabecera comun de cola y lista. Devuelve la altura ocupada.
@@ -1058,12 +1971,12 @@ double drawHeader(QPainter &p, const OverlayStyle &s, const QRectF &inner, const
 	if (!right.isEmpty()) {
 		rightW = qMin(textWidth(rightFont, right) + 2, inner.width() * 0.6);
 		p.setFont(rightFont);
-		p.setPen(s.mutedColor);
+		p.setPen(howtoInk(s)); // instrucciones para pedir (o "pedidos cerrados")
 		p.drawText(QRectF(inner.right() - rightW, inner.top(), rightW, h),
 			   Qt::AlignRight | Qt::AlignVCenter | Qt::TextSingleLine, elide(rightFont, right, rightW));
 	}
 	p.setFont(labelFont);
-	p.setPen(s.accentColor);
+	p.setPen(s.labelColor);
 	const double leftW = inner.width() - rightW - (rightW > 0 ? s.fontSize * 0.4 : 0);
 	p.drawText(QRectF(inner.left(), inner.top(), leftW, h), Qt::AlignLeft | Qt::AlignVCenter | Qt::TextSingleLine,
 		   elide(labelFont, left.toUpper(), leftW));
@@ -1105,8 +2018,8 @@ void drawQueue(QPainter &p, const OverlayStyle &s, const OverlayData &d)
 		QString label = s.label.trimmed().isEmpty() ? d.lblQueue : s.label.trimmed();
 		if (d.queueTotal > 0)
 			label += QStringLiteral("  \u00b7  %1").arg(d.queueTotal);
-		// Como pedir: a la vista siempre, tambien cuando ya hay canciones en la cola.
-		const QString right = !d.requestsOpen ? d.lblClosed : (s.showHowTo ? d.lblHowTo : QString());
+		// las instrucciones para pedir van con la lista, no con la cola
+		const QString right = !d.requestsOpen ? d.lblClosed : QString();
 		y += drawHeader(p, s, inner, label, right);
 	}
 
@@ -1127,7 +2040,7 @@ void drawQueue(QPainter &p, const OverlayStyle &s, const OverlayData &d)
 		double right = inner.right();
 		if (s.showNumbers) {
 			p.setFont(numFont);
-			p.setPen(s.accentColor);
+			p.setPen(s.labelColor);
 			p.drawText(QRectF(x, y, numW, rowH), Qt::AlignLeft | Qt::AlignVCenter | Qt::TextSingleLine,
 				   QString::number(i + 1));
 			x += numW;
@@ -1230,7 +2143,7 @@ void drawSongList(QPainter &p, const OverlayStyle &s, const OverlayData &d)
 		const double y = top + r * rowH;
 		if (s.showNumbers) {
 			p.setFont(numFont);
-			p.setPen(s.accentColor);
+			p.setPen(s.labelColor);
 			p.drawText(QRectF(x, y, numW - s.fontSize * 0.3, rowH),
 				   Qt::AlignRight | Qt::AlignVCenter | Qt::TextSingleLine, QString::number(row.number));
 			x += numW;
@@ -1416,7 +2329,7 @@ void drawBarList(QPainter &p, const OverlayStyle &s, const OverlayData &d, const
 		double x = left;
 		if (s.showNumbers) {
 			p.setFont(numFont);
-			p.setPen(s.accentColor);
+			p.setPen(s.labelColor);
 			p.drawText(QRectF(x, y, numW - numGap, g.listRowH), Qt::AlignRight | Qt::AlignVCenter | Qt::TextSingleLine,
 				   QString::number(row.number));
 			x += numW;
@@ -1469,7 +2382,7 @@ void drawBarNow(QPainter &p, const OverlayStyle &s, const OverlayData &d, const 
 	const double textH = (n.label.isEmpty() ? 0 : lfm.height() + gap) + tfm.height() + (n.sub.isEmpty() ? 0 : sfm.height() + gap * 0.5);
 	double y = inner.center().y() - textH / 2;
 	if (!n.label.isEmpty()) {
-		drawLine(p, labelFont, s.accentColor, QRectF(x, y, w, lfm.height()), n.label);
+		drawLine(p, labelFont, s.labelColor, QRectF(x, y, w, lfm.height()), n.label);
 		y += lfm.height() + gap;
 	}
 	drawLine(p, titleFont, n.idle ? s.mutedColor : s.textColor, QRectF(x, y, w, tfm.height()), n.title);
@@ -1486,7 +2399,7 @@ void drawBarQueue(QPainter &p, const OverlayStyle &s, const OverlayData &d, cons
 		QString label = d.lblQueue;
 		if (d.queueTotal > 0)
 			label += QStringLiteral("  ·  %1").arg(d.queueTotal);
-		const QString right = !d.requestsOpen ? d.lblClosed : (s.showHowTo ? d.lblHowTo : QString());
+		const QString right = !d.requestsOpen ? d.lblClosed : QString(); // las instrucciones van con la lista
 		y += drawHeader(p, s, inner, label, right);
 	}
 	const QFont rowFont = makeFont(s, g.f * kBarQueueScale, s.bold);
@@ -1514,7 +2427,7 @@ void drawBarQueue(QPainter &p, const OverlayStyle &s, const OverlayData &d, cons
 		double right = inner.right();
 		if (s.showNumbers) {
 			p.setFont(numFont);
-			p.setPen(s.accentColor);
+			p.setPen(s.labelColor);
 			p.drawText(QRectF(x, y, numW, g.queueRowH), Qt::AlignLeft | Qt::AlignVCenter | Qt::TextSingleLine,
 				   QString::number(i + 1));
 			x += numW;
@@ -2252,7 +3165,7 @@ void drawCardQueueCovers(QPainter &p, const OverlayStyle &s, const OverlayData &
 	const int extra = qMax(int(d.queue.size()), d.queueTotal) - qMin(2, int(d.queue.size()));
 	if (layer != BarMoving) {
 		cardQueueDashes(p, s, g, inner);
-		cardLabel(p, s, g, QRectF(inner.left(), inner.top(), inner.width() * 0.8, labelH), cardQueueLabel(d), s.accentColor, false,
+		cardLabel(p, s, g, QRectF(inner.left(), inner.top(), inner.width() * 0.8, labelH), cardQueueLabel(d), s.labelColor, false,
 			  QColor());
 	}
 	switch (s.queueLook) {
@@ -2306,12 +3219,10 @@ void drawCardQueue(QPainter &p, const OverlayStyle &s, const OverlayData &d, con
 	const double labelH = QFontMetricsF(makeFont(s, g.f * kCardLabel, true)).height();
 	const double blockH = labelH + tfm.height() + sfm.height();
 	double y = inner.top() + (area - blockH) / 2;
-	cardLabel(p, s, g, QRectF(x, y, w, labelH), cardQueueLabel(d), s.accentColor, false, QColor());
+	cardLabel(p, s, g, QRectF(x, y, w, labelH), cardQueueLabel(d), s.labelColor, false, QColor());
 	y += labelH;
 	if (d.queue.isEmpty()) {
 		drawLine(p, titleFont, s.textColor, QRectF(x, y, w, tfm.height()), d.requestsOpen ? d.lblEmptyQueue : d.lblClosed);
-		y += tfm.height();
-		drawLine(p, subFont, s.mutedColor, QRectF(x, y, w, sfm.height()), d.lblHowTo);
 	} else {
 		const OverlayRow &next = d.queue.first();
 		drawLine(p, titleFont, s.textColor, QRectF(x, y, w, tfm.height()), next.title);
@@ -2375,7 +3286,7 @@ void drawCardList(QPainter &p, const OverlayStyle &s, const OverlayData &d, cons
 				double x = left;
 				if (s.showNumbers) {
 					p.setFont(numFont);
-					p.setPen(s.accentColor);
+					p.setPen(s.labelColor);
 					p.drawText(QRectF(x, y, numW - numGap, g.listRowH), Qt::AlignRight | Qt::AlignVCenter | Qt::TextSingleLine,
 						   QString::number(row.number));
 					x += numW;
@@ -2422,7 +3333,7 @@ void drawCardList(QPainter &p, const OverlayStyle &s, const OverlayData &d, cons
 	const double w = textWidth(footFont, foot);
 	p.save();
 	p.setFont(footFont);
-	p.setPen(s.mutedColor);
+	p.setPen(howtoInk(s));
 	if (w <= area.width()) { // cabe: quieto
 		if (layer != BarMoving)
 			p.drawText(area, Qt::AlignLeft | Qt::AlignVCenter | Qt::TextSingleLine, foot);
@@ -2446,9 +3357,15 @@ void drawBar(QPainter &p, const OverlayStyle &style, const OverlayData &d, doubl
 	s.fontSize = int(g.f + 0.5);
 	if (s.barStyle == OverlayStyle::BarCard) {
 		g.theme = cardTheme(style);
+		if (style.ownTextColors) { // letras con los colores elegidos, sobre cualquier tema
+			g.theme.text = style.textColor;
+			g.theme.muted = style.mutedColor;
+			g.theme.accent = style.accentColor;
+		}
 		s.textColor = g.theme.text; // las piezas comunes toman los colores del tema
 		s.mutedColor = g.theme.muted;
 		s.accentColor = g.theme.accent;
+		s.labelColor = style.ownTextColors ? style.labelColor : g.theme.accent;
 		s.backgroundColor = g.theme.bgTop;
 		const double base = qBound(0.0, opacity, 1.0);
 		if (layer != BarMoving) {
@@ -2590,12 +3507,24 @@ QImage renderOverlay(const OverlayStyle &style, const OverlayData &data, double 
 	p.setOpacity(qBound(0.0, opacity, 1.0));
 	switch (s.mode) {
 	case OverlayStyle::NowPlaying:
+		if (isVertical(s)) { // de pie: portada grande arriba (los casetes siguen horizontales)
+			switch (s.skin) {
+			case OverlayStyle::Minimal: drawNowPlayingV(p, s, data); break;
+			case OverlayStyle::Cassette: drawCassette(p, s, data, s.animate ? seconds : 0.0); break;
+			case OverlayStyle::Led: drawLedV(p, s, data, seconds); break;
+			case OverlayStyle::Vinyl: drawVinylV(p, s, data, seconds); break;
+			case OverlayStyle::Turntable: drawTurntableV(p, s, data, seconds); break;
+			case OverlayStyle::NeonCassette: drawNeonCassette(p, s, data, seconds); break;
+			}
+			break;
+		}
 		switch (s.skin) {
 		case OverlayStyle::Minimal: drawNowPlaying(p, s, data); break;
 		case OverlayStyle::Cassette: drawCassette(p, s, data, s.animate ? seconds : 0.0); break;
 		case OverlayStyle::Led: drawLed(p, s, data, seconds); break;
 		case OverlayStyle::Vinyl: drawVinyl(p, s, data, seconds); break;
 		case OverlayStyle::Turntable: drawTurntable(p, s, data, seconds); break;
+		case OverlayStyle::NeonCassette: drawNeonCassette(p, s, data, seconds); break;
 		}
 		break;
 	case OverlayStyle::Queue: drawQueue(p, skinned(s), data); break;

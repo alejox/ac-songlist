@@ -114,9 +114,25 @@ En las propiedades de la fuente puedes cambiar el ancho y el alto (por defecto 1
 
 «Sonando ahora» no desaparece al terminar una canción: el disco se detiene y se queda toda su información (título, artista y quién la pidió) con el rótulo **Última canción**, hasta que empiece la siguiente.
 
-**Skins.** En las propiedades de la fuente, **Skin** permite elegir entre *Minimalista* y tres retro: *casete*, *equipo de sonido* y *vinilo*. Los retro tienen su propia paleta y solo toman tu **color de acento**; si no quieres movimiento, desmarca **Animar**.
+**Skins.** En las propiedades de la fuente, **Skin** permite elegir entre *Minimalista* y los retro: *casete*, *equipo de sonido*, *vinilo* y *casete neón*. Los retro tienen su propia paleta y toman tu **color de acento** solo para los adornos; si no quieres movimiento, desmarca **Animar**.
 
-**Tocadiscos.** Para «Sonando ahora» hay además el skin **Tocadiscos (cambia el disco en cada canción)**: la funda con la portada, el vinilo asomando y el brazo sobre el disco, en una tarjeta con los colores de la portada. Muestra el título, el artista, quién la pidió, cuánto lleva sonando y cuál es la siguiente de la cola.
+**Casete neón.** Un casete futurista de carcasa oscura: los carretes, los tornillos y las guías brillan en tu **color de acento** (rosa, cian, lima…). Arriba va la etiqueta con el título en grande y el artista, y en la esquina la portada de la canción; abajo, quién la pidió y la siguiente de la cola. Los carretes giran mientras suena y, al cambiar de canción, rebobinan y la etiqueta parpadea. Siempre conserva la forma de un casete, también en una fuente vertical. Sirve también para la cola y la lista.
+
+![Casete neón](docs/casete-neon.png)
+
+**Formato vertical.** En «Sonando ahora», **Formato** puede ser *Automático* (de pie si la fuente es más alta que ancha), *Horizontal* o *Vertical*. Al elegir *Vertical* con el tamaño por defecto, la fuente pasa a 400 × 640. De pie, la portada va grande arriba y el texto debajo: etiqueta, título en hasta dos líneas, artista, quién la pidió y la siguiente. Hay versión de pie del minimalista, el tocadiscos (con su cambio de disco), el equipo de sonido y el vinilo; los casetes se mantienen horizontales.
+
+![Sonando ahora en vertical: minimalista, tocadiscos, equipo de sonido y vinilo](docs/vertical.png)
+
+**Letras y colores.** Todas las letras se pueden cambiar en las propiedades de la fuente:
+
+- **Fuente:** la de los títulos (su tamaño es el del título).
+- **Fuente de las descripciones:** la del artista, las etiquetas y las filas de la cola y la lista. Su tamaño es el del artista; el resto se ajusta a esa escala.
+- **Letra de las instrucciones:** la de «Pide con !sr…», debajo de la lista.
+- **Colores:** de los títulos, de las descripciones, de las etiquetas y números («SONANDO AHORA», cabeceras) y de las instrucciones. Son independientes del color de acento, que solo se usa para adornos.
+- En los temas de la tarjeta y en los skins retro, marca **Usar mis colores de letra** para que manden tus colores en vez de los del tema (útil si bajas la opacidad del fondo y la letra deja de leerse).
+
+**Tocadiscos.** Para «Sonando ahora» hay además el skin **Tocadiscos (cambia el disco en cada canción)**: la funda con la portada, el vinilo asomando y el brazo sobre el disco, en una tarjeta con los colores de la portada. Muestra el título, el artista, quién la pidió y cuál es la siguiente de la cola, con letra grande: su tamaño es el de **Fuente** y no depende del tamaño de la portada.
 
 - Al cambiar de canción se ve el cambio de disco: el brazo se levanta, el disco se guarda en la funda, la funda sale, entra la nueva, sale el disco y el brazo baja.
 - Al terminar la canción el brazo se levanta, el disco se detiene y se queda la información con el rótulo **Última canción**.
@@ -126,7 +142,7 @@ En las propiedades de la fuente puedes cambiar el ancho y el alto (por defecto 1
 
 ![Cambio de disco](docs/tocadiscos-cambio.png)
 
-**Cambiar el aspecto** (skin minimalista, en las propiedades de cada fuente): tipografía y tamaño, color del texto, color de acento, color y opacidad del fondo (0 = sin fondo), esquinas redondeadas, alineación, filas y columnas, y qué datos mostrar.
+**Cambiar el aspecto** (skin minimalista, en las propiedades de cada fuente): tipografías y tamaños, colores de las letras, color de acento, color y opacidad del fondo (0 = sin fondo), esquinas redondeadas, alineación, filas y columnas, y qué datos mostrar.
 
 ## 5. En directo
 

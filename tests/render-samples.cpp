@@ -247,6 +247,49 @@ int main(int argc, char **argv)
 		lightData.queue.removeLast();
 	saveOnScene(renderOverlay(barLight, lightData, 1.0, 0.9), dir + "/24-barra-clara-720.png");
 
+	{ // sonando de pie (400 x 640) en cada skin, y el casete neon
+		OverlayData vd = d;
+		vd.nextTitle = "Take On Me";
+		vd.nextArtist = "A-HA";
+		const OverlayStyle::Skin skins[] = {OverlayStyle::Minimal, OverlayStyle::Turntable, OverlayStyle::Led, OverlayStyle::Vinyl,
+						    OverlayStyle::NeonCassette, OverlayStyle::Cassette};
+		for (OverlayStyle::Skin sk : skins) {
+			OverlayStyle v = np;
+			v.skin = sk;
+			v.width = 400;
+			v.height = 640;
+			v.format = OverlayStyle::FormatVertical;
+			v.accentColor = sk == OverlayStyle::NeonCassette ? QColor(255, 63, 210) : v.accentColor;
+			saveOnBackdrop(renderOverlay(v, vd, 1.0, 1.3), dir + QString("/50-vertical-%1.png").arg(int(sk)));
+		}
+		OverlayStyle neon = np;
+		neon.skin = OverlayStyle::NeonCassette;
+		neon.width = 760;
+		neon.height = 480;
+		for (const QColor &c : {QColor(255, 63, 210), QColor(34, 227, 240), QColor(212, 245, 60)}) {
+			neon.accentColor = c;
+			saveOnBackdrop(renderOverlay(neon, vd, 1.0, 1.3), dir + QString("/51-neon-%1.png").arg(c.name().mid(1)));
+		}
+		OverlayStyle q = np; // la cola con el skin neon
+		q.skin = OverlayStyle::NeonCassette;
+		q.mode = OverlayStyle::Queue;
+		q.width = 640;
+		q.height = 460;
+		q.accentColor = QColor(34, 227, 240);
+		saveOnBackdrop(renderOverlay(q, d, 1.0, 0.0), dir + "/52-neon-cola.png");
+		OverlayStyle own = np; // titulo largo, colores y letra de descripciones propios
+		own.skin = OverlayStyle::Minimal;
+		own.width = 400;
+		own.height = 640;
+		own.format = OverlayStyle::FormatVertical;
+		own.labelColor = QColor(250, 204, 21);
+		own.subFamily = "DejaVu Serif";
+		own.subScale = 1.25;
+		OverlayData longD = vd;
+		longD.title = "The Girl Who Stole The Stars (Chrono Cross Main Theme)";
+		saveOnBackdrop(renderOverlay(own, longD, 1.0, 0.0), dir + "/53-vertical-largo.png");
+	}
+
 	// tocadiscos: quieto, momentos del cambio de disco y "ultima cancion"
 	OverlayStyle tt = np;
 	tt.skin = OverlayStyle::Turntable;
@@ -257,6 +300,18 @@ int main(int argc, char **argv)
 	ttData.nextTitle = "Take On Me";
 	ttData.nextArtist = "A-HA";
 	saveOnBackdrop(renderOverlay(tt, ttData, 1.0, 0.3), dir + "/30-tocadiscos.png");
+	{ // letra mas grande con el tamano de "Fuente" (la funda no cambia) y colores de letra propios
+		OverlayStyle big = tt;
+		big.fontSize = 58;
+		saveOnBackdrop(renderOverlay(big, ttData, 1.0, 0.3), dir + "/30-tocadiscos-letra-58.png");
+		big.fontSize = 120; // no cabe: se reduce hasta caber en la tarjeta
+		saveOnBackdrop(renderOverlay(big, ttData, 1.0, 0.3), dir + "/30-tocadiscos-letra-120.png");
+		OverlayStyle own = tt;
+		own.ownTextColors = true;
+		own.textColor = QColor(255, 226, 120);
+		own.mutedColor = QColor(190, 230, 255, 230);
+		saveOnBackdrop(renderOverlay(own, ttData, 1.0, 0.3), dir + "/30-tocadiscos-colores.png");
+	}
 	OverlayData change = ttData;
 	change.oldTitle = "Neon Lullaby";
 	change.oldArtist = "Parade of Ghosts";
@@ -331,6 +386,16 @@ int main(int argc, char **argv)
 			const QImage b = renderOverlay(c, two, 1.0, 0.6, &cache);
 			b.save(dir + QString("/46-cola-%1-cache.png").arg(look));
 			a.save(dir + QString("/46-cola-%1-sincache.png").arg(look));
+		}
+		{ // colores de letra propios sobre un tema, sin fondo (para que se lea sobre lo que haya detras)
+			OverlayStyle c = card;
+			c.cardTheme = 2;
+			c.cardOpacity = 0;
+			c.ownTextColors = true;
+			c.textColor = QColor(255, 236, 140);
+			c.mutedColor = QColor(255, 255, 255, 220);
+			c.accentColor = QColor(56, 189, 248);
+			saveOnScene(renderOverlay(c, cd, 1.0, 0.6), dir + "/47-letra-propia.png");
 		}
 		OverlayData idle = cd; // sin nada sonando, cola vacia
 		idle.hasPlaying = false;

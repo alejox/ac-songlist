@@ -41,7 +41,7 @@ void readSettings(OverlaySource *ctx, obs_data_t *settings)
 {
 	OverlayStyle s;
 	s.mode = OverlayStyle::Mode(qBound(0, int(obs_data_get_int(settings, "mode")), kModes - 1));
-	s.skin = OverlayStyle::Skin(qBound(0, int(obs_data_get_int(settings, "skin")), 4));
+	s.skin = OverlayStyle::Skin(qBound(0, int(obs_data_get_int(settings, "skin")), int(OverlayStyle::NeonCassette)));
 	s.animate = obs_data_get_bool(settings, "animate");
 	s.showHowTo = obs_data_get_bool(settings, "show_howto");
 	s.showWeb = obs_data_get_bool(settings, "show_web");
@@ -63,6 +63,30 @@ void readSettings(OverlaySource *ctx, obs_data_t *settings)
 	s.textColor = colorFromObs(obs_data_get_int(settings, "text_color"));
 	s.mutedColor = s.textColor;
 	s.mutedColor.setAlpha(168);
+	if (obs_data_has_user_value(settings, "sub_color")) { // si no se eligio: el de los titulos, mas tenue
+		const long long sub = obs_data_get_int(settings, "sub_color");
+		s.mutedColor = colorFromObs(sub, int((sub >> 24) & 0xff));
+	}
+	s.ownTextColors = obs_data_get_bool(settings, "own_text_colors");
+	{
+		const long long lc = obs_data_get_int(settings, "label_color");
+		s.labelColor = colorFromObs(lc, int((lc >> 24) & 0xff));
+	}
+	if (obs_data_has_user_value(settings, "howto_color")) {
+		const long long hc = obs_data_get_int(settings, "howto_color");
+		s.howtoColor = colorFromObs(hc, int((hc >> 24) & 0xff));
+	}
+	s.format = OverlayStyle::Format(qBound(0, int(obs_data_get_int(settings, "format")), int(OverlayStyle::FormatVertical)));
+	// letra de descripciones y etiquetas: solo si se eligio (si no, la de los titulos a su escala)
+	if (obs_data_has_user_value(settings, "sub_font")) {
+		if (obs_data_t *sf = obs_data_get_obj(settings, "sub_font")) {
+			s.subFamily = QString::fromUtf8(obs_data_get_string(sf, "face"));
+			const int size = int(obs_data_get_int(sf, "size"));
+			if (size > 0 && s.fontSize > 0)
+				s.subScale = qBound(0.3, size / (s.fontSize * 0.56), 4.0); // el tamano elegido es el del artista
+			obs_data_release(sf);
+		}
+	}
 	s.accentColor = colorFromObs(obs_data_get_int(settings, "accent_color"));
 	s.backgroundColor = colorFromObs(obs_data_get_int(settings, "bg_color"));
 	s.backgroundOpacity = int(obs_data_get_int(settings, "bg_opacity"));
@@ -220,18 +244,26 @@ bool modeChanged(obs_properties_t *props, obs_property_t *, obs_data_t *settings
 	const bool card = bar && obs_data_get_int(settings, "bar_style") == OverlayStyle::BarCard;
 	const bool themed = card && obs_data_get_int(settings, "card_theme") > 0;
 	setVisible(props, "skin", !bar);
-	setVisible(props, "text_color", minimal && !themed);
+	// colores de letra: siempre a mano; sobre un tema o un skin retro, al marcar la casilla
+	const bool own = obs_data_get_bool(settings, "own_text_colors");
+	const bool palette = themed || !minimal;
+	setVisible(props, "own_text_colors", palette);
+	setVisible(props, "text_color", !palette || own);
+	setVisible(props, "sub_color", !palette || own);
+	setVisible(props, "label_color", !palette || own);
+	setVisible(props, "howto_color", list || bar);
+	setVisible(props, "format", np);
 	setVisible(props, "bg_color", minimal && !themed);
 	setVisible(props, "bg_opacity", minimal && !card);
 	setVisible(props, "card_opacity", card);
 	setVisible(props, "queue_look", card);
 	setVisible(props, "howto_font", card);
-	setVisible(props, "accent_color", !themed);
+	setVisible(props, "accent_color", !themed || own);
 	setVisible(props, "card_theme", card);
 	setVisible(props, "radius", minimal && !themed);
 	setVisible(props, "padding", minimal || !np);
 	setVisible(props, "animate", bar || (!minimal && np));
-	setVisible(props, "show_howto", queue || list || bar);
+	setVisible(props, "show_howto", list || bar); // las instrucciones van con la lista
 	setVisible(props, "show_web", list || bar);
 	setVisible(props, "accent_bar", np && minimal);
 	setVisible(props, "idle_text", np || bar);
@@ -259,6 +291,23 @@ bool modeChanged(obs_properties_t *props, obs_property_t *, obs_data_t *settings
 		}
 	}
 	return true;
+}
+
+// Al pasar "sonando ahora" a vertical con el tamano por defecto, la fuente se pone de pie.
+bool formatChanged(obs_properties_t *props, obs_property_t *p, obs_data_t *settings)
+{
+	const int format = int(obs_data_get_int(settings, "format"));
+	const long long w = obs_data_get_int(settings, "width"), h = obs_data_get_int(settings, "height");
+	if (obs_data_get_int(settings, "mode") == OverlayStyle::NowPlaying) {
+		if (format == OverlayStyle::FormatVertical && w == kDefaults[0].width && h == kDefaults[0].height) {
+			obs_data_set_int(settings, "width", 400);
+			obs_data_set_int(settings, "height", 640);
+		} else if (format == OverlayStyle::FormatHorizontal && w == 400 && h == 640) {
+			obs_data_set_int(settings, "width", kDefaults[0].width);
+			obs_data_set_int(settings, "height", kDefaults[0].height);
+		}
+	}
+	return modeChanged(props, p, settings);
 }
 
 obs_properties_t *sourceProperties(void *)
@@ -300,7 +349,14 @@ obs_properties_t *sourceProperties(void *)
 	obs_property_list_add_int(skin, obs_module_text("Source.Skin.Led"), OverlayStyle::Led);
 	obs_property_list_add_int(skin, obs_module_text("Source.Skin.Vinyl"), OverlayStyle::Vinyl);
 	obs_property_list_add_int(skin, obs_module_text("Source.Skin.Turntable"), OverlayStyle::Turntable);
+	obs_property_list_add_int(skin, obs_module_text("Source.Skin.NeonCassette"), OverlayStyle::NeonCassette);
 	obs_property_set_modified_callback(skin, modeChanged);
+	obs_property_t *format = obs_properties_add_list(props, "format", obs_module_text("Source.Format"), OBS_COMBO_TYPE_LIST,
+							 OBS_COMBO_FORMAT_INT);
+	obs_property_list_add_int(format, obs_module_text("Source.Format.Auto"), OverlayStyle::FormatAuto);
+	obs_property_list_add_int(format, obs_module_text("Source.Format.Horizontal"), OverlayStyle::FormatHorizontal);
+	obs_property_list_add_int(format, obs_module_text("Source.Format.Vertical"), OverlayStyle::FormatVertical);
+	obs_property_set_modified_callback(format, formatChanged);
 	obs_properties_add_bool(props, "animate", obs_module_text("Source.Animate"));
 
 	obs_properties_add_int(props, "width", obs_module_text("Source.Width"), 64, 4096, 10);
@@ -308,7 +364,13 @@ obs_properties_t *sourceProperties(void *)
 	obs_properties_add_int_slider(props, "bar_center", obs_module_text("Source.BarCenter"), 20, 60, 1);
 
 	obs_properties_add_font(props, "font", obs_module_text("Source.Font"));
+	obs_properties_add_font(props, "sub_font", obs_module_text("Source.SubFont"));
+	obs_property_t *own = obs_properties_add_bool(props, "own_text_colors", obs_module_text("Source.OwnTextColors"));
+	obs_property_set_modified_callback(own, modeChanged);
 	obs_properties_add_color(props, "text_color", obs_module_text("Source.TextColor"));
+	obs_properties_add_color_alpha(props, "sub_color", obs_module_text("Source.SubColor"));
+	obs_properties_add_color_alpha(props, "label_color", obs_module_text("Source.LabelColor"));
+	obs_properties_add_color_alpha(props, "howto_color", obs_module_text("Source.HowtoColor"));
 	obs_properties_add_color(props, "accent_color", obs_module_text("Source.AccentColor"));
 	obs_properties_add_color(props, "bg_color", obs_module_text("Source.BgColor"));
 	obs_properties_add_int_slider(props, "bg_opacity", obs_module_text("Source.BgOpacity"), 0, 100, 1);
@@ -361,6 +423,16 @@ void sourceDefaults(obs_data_t *settings)
 	obs_data_release(font);
 
 	obs_data_set_default_int(settings, "text_color", 0xFFFFFFFF);
+	obs_data_set_default_int(settings, "sub_color", 0xA8FFFFFF);
+	obs_data_set_default_int(settings, "label_color", 0xFFF8BD38); // #38BDF8, independiente del acento
+	obs_data_set_default_int(settings, "howto_color", 0xA8FFFFFF);
+	obs_data_set_default_int(settings, "format", OverlayStyle::FormatAuto);
+	obs_data_t *subFont = obs_data_create();
+	obs_data_set_default_string(subFont, "face", kDefaultFont);
+	obs_data_set_default_int(subFont, "size", 22);
+	obs_data_set_default_obj(settings, "sub_font", subFont);
+	obs_data_release(subFont);
+	obs_data_set_default_bool(settings, "own_text_colors", false);
 	obs_data_set_default_int(settings, "accent_color", 0xFFF8BD38); // #38BDF8
 	obs_data_set_default_int(settings, "bg_color", 0xFF141010);     // #101014
 	obs_data_set_default_int(settings, "bg_opacity", 85);

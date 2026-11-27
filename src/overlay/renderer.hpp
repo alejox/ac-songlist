@@ -19,7 +19,11 @@ struct OverlayStyle {
 	// Aspecto. Los retro traen su propia paleta; de los colores elegidos solo usan el de acento.
 	// Tocadiscos: funda con su portada, vinilo y brazo; los colores salen de la portada y al
 	// cambiar de cancion se ve como se cambia el disco.
-	enum Skin { Minimal = 0, Cassette = 1, Led = 2, Vinyl = 3, Turntable = 4 };
+	// Casete neon: casete futurista con carretes que brillan en el color de acento.
+	enum Skin { Minimal = 0, Cassette = 1, Led = 2, Vinyl = 3, Turntable = 4, NeonCassette = 5 };
+	// "Sonando ahora": horizontal, de pie (portada grande arriba y texto debajo) o segun la
+	// forma de la fuente (de pie si es mas alta que ancha).
+	enum Format { FormatAuto = 0, FormatHorizontal = 1, FormatVertical = 2 };
 	// Barra: cristal de borde a borde, o tarjeta oscura con linea de acento, portada, cinta
 	// con la cola y barra de progreso de paginas.
 	enum BarStyle { BarGlass = 0, BarCard = 1 };
@@ -30,6 +34,7 @@ struct OverlayStyle {
 
 	Mode mode = NowPlaying;
 	Skin skin = Minimal;
+	Format format = FormatAuto;
 	BarStyle barStyle = BarGlass;
 	// Tarjeta: tema de colores. 0 = con los colores elegidos en la fuente; 1..kCardThemes = temas
 	// listos (Medianoche, Nieve, Neon, Aurora, Cristal, Menta).
@@ -49,8 +54,16 @@ struct OverlayStyle {
 	bool bold = true;
 	bool italic = false;
 
-	QColor textColor = QColor(255, 255, 255);
-	QColor mutedColor = QColor(255, 255, 255, 170);
+	QColor textColor = QColor(255, 255, 255);  // titulos y texto principal
+	QColor mutedColor = QColor(255, 255, 255, 170); // descripciones: artista, etiquetas, textos pequenos
+	// true = textColor, mutedColor y accentColor mandan tambien sobre los colores del tema de la
+	// tarjeta y de los skins retro (para que se lea sobre cualquier fondo)
+	bool ownTextColors = false;
+	QColor labelColor = QColor(56, 189, 248); // etiquetas ("SONANDO AHORA", cabeceras) y numeros
+	QColor howtoColor;                        // instrucciones para pedir; invalido = el de descripciones
+	// letra de las descripciones y etiquetas (vacio = la de los titulos); subScale las agranda o achica
+	QString subFamily;
+	double subScale = 1.0;
 	QColor accentColor = QColor(56, 189, 248);
 	QColor backgroundColor = QColor(16, 16, 20);
 	int backgroundOpacity = 85; // 0 = sin fondo, 100 = opaco
@@ -139,6 +152,13 @@ struct OverlayCache {
 // opacity (0..1) se usa para los fundidos; seconds es el reloj de las animaciones.
 QImage renderOverlay(const OverlayStyle &style, const OverlayData &data, double opacity = 1.0, double seconds = 0.0,
 		     OverlayCache *cache = nullptr);
+
+// "Sonando ahora" de pie.
+inline bool isVertical(const OverlayStyle &s)
+{
+	return s.mode == OverlayStyle::NowPlaying &&
+	       (s.format == OverlayStyle::FormatVertical || (s.format == OverlayStyle::FormatAuto && s.height > s.width));
+}
 
 // true si ese estilo se mueve solo y hay que redibujarlo varias veces por segundo.
 inline bool isAnimated(const OverlayStyle &s)

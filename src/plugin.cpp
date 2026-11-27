@@ -310,6 +310,10 @@ OverlayData Plugin::buildData(View &view, qint64 now, QString *identity)
 			d.title = playing.title;
 			d.artist = playing.artist;
 			d.requesters = playing.requesters();
+			if (!m_store.queue().isEmpty()) { // la siguiente (la muestran los disenos de pie)
+				d.nextTitle = m_store.queue().first().title;
+				d.nextArtist = m_store.queue().first().artist;
+			}
 			*identity = QStringLiteral("np") + QChar(0x1f) + QString::number(playing.id) + QChar(0x1f) +
 				    d.title + QChar(0x1f) + d.artist;
 		} else {
@@ -599,8 +603,9 @@ bool Plugin::updateView(View &view, qint64 now, double dtMs)
 	}
 	if (view.style.mode == OverlayStyle::Bar)
 		return updateBar(view, now, dtMs);
-	if (view.style.mode == OverlayStyle::NowPlaying && view.style.skin == OverlayStyle::Turntable)
-		return updateTurntable(view, now, dtMs);
+	if (view.style.mode == OverlayStyle::NowPlaying &&
+	    (view.style.skin == OverlayStyle::Turntable || view.style.skin == OverlayStyle::NeonCassette))
+		return updateTurntable(view, now, dtMs); // tambien el casete neon: rebobina al cambiar de cancion
 
 	QString targetIdentity;
 	const OverlayData target = buildData(view, now, &targetIdentity);
@@ -642,7 +647,8 @@ bool Plugin::updateView(View &view, qint64 now, double dtMs)
 		      QChar(0x1d) + view.identity + QChar(0x1d) + d.title + QChar(0x1f) + d.artist + QChar(0x1f) +
 		      d.requesters.join(QLatin1Char(',')) + QChar(0x1d) + QString::number(d.queueTotal) + QChar(0x1f) +
 		      QString::number(d.songsTotal) + QChar(0x1f) + QString::number(d.pages) + QChar(0x1f) +
-		      (d.requestsOpen ? QLatin1Char('1') : QLatin1Char('0')) + QChar(0x1f) + d.webUrl + QChar(0x1d);
+		      (d.requestsOpen ? QLatin1Char('1') : QLatin1Char('0')) + QChar(0x1f) + d.webUrl + QChar(0x1f) + d.nextTitle +
+		      QChar(0x1f) + d.nextArtist + QChar(0x1d);
 	for (const OverlayRow &r : d.queue)
 		sig += joinRow(r);
 	for (const OverlayRow &r : d.songs)

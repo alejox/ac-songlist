@@ -2,6 +2,12 @@
 # Formato: "## version" y debajo una linea por novedad empezando con "- ".
 
 ## 1.10.0
+- «Sonando ahora» en vertical: nuevo ajuste «Formato» (Automático, Horizontal o Vertical). De pie, la portada va grande arriba y el texto debajo, en el minimalista, el tocadiscos, el equipo de sonido y el vinilo.
+- Nuevo skin «Casete neón»: un casete futurista con carretes que brillan en tu color de acento y la portada en la esquina; rebobina al cambiar de canción.
+- Todas las letras se pueden cambiar: fuente de títulos y de descripciones, y colores de títulos, descripciones, etiquetas y números, e instrucciones. Son independientes del color de acento.
+- En los temas de la tarjeta y los skins retro, «Usar mis colores de letra» hace que manden tus colores (útil al bajar la opacidad del fondo).
+- Tocadiscos: ya no muestra el tiempo de la canción y la letra es más grande; su tamaño sigue a «Fuente».
+- Las instrucciones para pedir ya no salen en la cola: van con la lista de canciones.
 - Barra en diseño «Tarjeta»: nuevo «Diseño de la cola» en las propiedades de la fuente. Además de la cinta, ahora puedes mostrar los 2 siguientes pedidos como portadas con el título abajo y una señal de que vienen más:
 - Galería de portadas: el siguiente en grande con un marco del color del tema, el segundo al lado y una pila con «+N •••».
 - Vinilos asomando: cada pedido es una funda con su disco asomando (que gira despacio) y, al final, discos pequeños que se desvanecen y «+N más».
